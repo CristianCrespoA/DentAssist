@@ -1,20 +1,13 @@
 require('dotenv').config();
-const mysql = require('mysql2/promise');
 const app = require('./src/app');
+const db = require('./src/models');
 
 const PORT = process.env.PORT || 3000;
 
 async function iniciarServidor() {
   try {
-    const connection = await mysql.createConnection({
-      host: process.env.DB_HOST,
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      database: process.env.DB_NAME
-    });
-
-    console.log('✅ Conectado a MySQL');
-    await connection.end();
+    await db.sequelize.authenticate();
+    console.log('✅ Conectado a MySQL con Sequelize');
 
     app.listen(PORT, () => {
       console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
