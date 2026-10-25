@@ -2,6 +2,7 @@ const { Op } = require('sequelize');
 const db = require('../models');
 const { errorNegocio } = require('../utils/errores');
 const { esFechaValida, esFechaFutura } = require('../utils/tiempo');
+const { normalizarFiltroTexto, patronContiene } = require('../utils/busqueda');
 
 const ATRIBUTOS_PUBLICOS = [
   'id',
@@ -253,8 +254,6 @@ const parsearEnteroPositivo = (valor, campo, { porDefecto, maximo } = {}) => {
   return numero;
 };
 
-const escaparLike = (texto) => texto.replace(/[\\%_]/g, (caracter) => `\\${caracter}`);
-
 const listarPacientes = async (filtros = {}) => {
   const pagina = parsearEnteroPositivo(filtros.pagina, 'pagina', { porDefecto: PAGINA_POR_DEFECTO });
   const limite = parsearEnteroPositivo(filtros.limite, 'limite', {
@@ -263,30 +262,23 @@ const listarPacientes = async (filtros = {}) => {
   });
 
   const where = {};
+  const termino = normalizarFiltroTexto(filtros.buscar, 'buscar');
 
-  if (filtros.buscar !== undefined) {
-    if (typeof filtros.buscar !== 'string') {
-      throw errorNegocio('El parámetro buscar debe ser texto');
+  if (termino) {
+    const patron = patronContiene(termino);
+    const condiciones = [
+      { nombre: { [Op.like]: patron } },
+      { apellido: { [Op.like]: patron } },
+      { correo: { [Op.like]: patron } }
+    ];
+
+    const digitos = termino.replace(/\D/g, '');
+
+    if (digitos) {
+      condiciones.push({ telefono: { [Op.like]: patronContiene(digitos) } });
     }
 
-    const termino = filtros.buscar.trim();
-
-    if (termino) {
-      const patron = `%${escaparLike(termino)}%`;
-      const condiciones = [
-        { nombre: { [Op.like]: patron } },
-        { apellido: { [Op.like]: patron } },
-        { correo: { [Op.like]: patron } }
-      ];
-
-      const digitos = termino.replace(/\D/g, '');
-
-      if (digitos) {
-        condiciones.push({ telefono: { [Op.like]: `%${digitos}%` } });
-      }
-
-      where[Op.or] = condiciones;
-    }
+    where[Op.or] = condiciones;
   }
 
   const { count, rows } = await db.Paciente.findAndCountAll({

@@ -127,3 +127,43 @@ La búsqueda cubre nombre, apellido, correo y teléfono. La respuesta tiene la f
 ### Eliminación
 
 Un paciente solo se puede eliminar si no tiene citas ni solicitudes registradas. En caso contrario la API responde `409` e indica qué historial debe cerrarse primero; esto evita que las llaves foráneas en `CASCADE` borren el historial clínico.
+
+## API de catálogo: profesionales y servicios
+
+Catálogo de **solo lectura**. Los profesionales y servicios se administran únicamente por seeders; no se exponen endpoints `POST`, `PUT` ni `DELETE`. Todas las rutas requieren `Authorization: Bearer <token>` y están disponibles solo para `admin` y `recepcionista`.
+
+| Método | Ruta | Descripción |
+| --- | --- | --- |
+| `GET` | `/api/profesionales` | Listar/buscar profesionales |
+| `GET` | `/api/profesionales/:id` | Obtener un profesional |
+| `GET` | `/api/servicios` | Listar/buscar servicios |
+| `GET` | `/api/servicios/:id` | Obtener un servicio |
+
+### Profesionales
+
+Cada profesional se devuelve con `id`, `nombre`, `apellido` y `especialidad`, ordenado alfabéticamente por apellido y nombre.
+
+| Query | Formato | Ejemplo |
+| --- | --- | --- |
+| `buscar` | texto libre | `/api/profesionales?buscar=ortodoncia` |
+| `especialidad` | texto libre (coincidencia parcial) | `/api/profesionales?especialidad=Ortodoncia` |
+
+`buscar` cubre nombre, apellido y especialidad. Se pueden combinar ambos filtros.
+
+### Servicios
+
+Cada servicio se devuelve con `id`, `nombre`, `descripcion`, `duracionMinutos` y `precio`, ordenado alfabéticamente por nombre.
+
+| Query | Formato | Ejemplo |
+| --- | --- | --- |
+| `buscar` | texto libre | `/api/servicios?buscar=limpieza` |
+
+`buscar` cubre nombre y descripción.
+
+### Respuestas
+
+- `200`: listado o detalle encontrado.
+- `400`: parámetro de búsqueda con formato inválido.
+- `401`: token ausente o inválido.
+- `403`: usuario sin rol de personal.
+- `404`: profesional o servicio inexistente.
