@@ -31,9 +31,26 @@ const esFechaValida = (fecha) => {
 
 const seCruzan = (inicioA, finA, inicioB, finB) => inicioA < finB && inicioB < finA;
 
+const fechaHoyBogota = () => {
+  const partes = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Bogota',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(new Date());
+
+  const valor = (tipo) => partes.find((parte) => parte.type === tipo).value;
+
+  return `${valor('year')}-${valor('month')}-${valor('day')}`;
+};
+
+const esFechaFutura = (fecha) => esFechaValida(fecha) && fecha > fechaHoyBogota();
+
 module.exports = {
   aMinutos,
   esHoraValida,
   esFechaValida,
+  esFechaFutura,
+  fechaHoyBogota,
   seCruzan
 };

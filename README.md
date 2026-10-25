@@ -63,3 +63,67 @@ El listado se devuelve ordenado por fecha y hora ascendente, con paciente, profe
 | `403` | El usuario no es personal de la clínica |
 | `404` | La cita o una referencia (paciente, profesional, servicio) no existe |
 | `409` | Cruce de horario |
+
+## API de pacientes
+
+Todas las rutas requieren el header `Authorization: Bearer <token>` y están disponibles solo para `admin` y `recepcionista`.
+
+| Método | Ruta | Descripción |
+| --- | --- | --- |
+| `POST` | `/api/pacientes` | Crear un paciente |
+| `GET` | `/api/pacientes` | Listar/buscar pacientes con paginación |
+| `GET` | `/api/pacientes/:id` | Obtener un paciente |
+| `PUT` | `/api/pacientes/:id` | Actualizar un paciente (campos parciales) |
+| `DELETE` | `/api/pacientes/:id` | Eliminar un paciente sin historial |
+
+### Crear paciente
+
+```json
+{
+  "nombre": "Laura",
+  "apellido": "Gómez",
+  "telefono": "+57 300 111 2233",
+  "correo": "Laura.Gomez@Example.com",
+  "fechaNacimiento": "1992-04-18",
+  "direccion": "Calle 45 #12-30, Bogotá"
+}
+```
+
+### Normalización
+
+- `nombre` y `apellido`: se eliminan espacios al inicio/fin y se colapsan los espacios internos.
+- `telefono`: se guardan solo los dígitos, con indicativo y sin `+`. Ejemplo: `+57 300 111 2233` → `573001112233`. Los números colombianos de 10 dígitos (móviles que empiezan por `3` y fijos que empiezan por `60`) se completan automáticamente con el indicativo `57`; también se elimina el prefijo internacional `00`.
+- `correo`: se guarda en minúsculas; un valor vacío se interpreta como `null`.
+- `direccion`: se recorta y se colapsan los espacios; un valor vacío se interpreta como `null`.
+
+### Reglas de validación
+
+- `nombre` y `apellido` son obligatorios y admiten máximo 100 caracteres.
+- `telefono` es obligatorio, debe contener entre 7 y 15 dígitos y no puede repetirse.
+- `correo` es opcional, debe tener formato válido, máximo 255 caracteres y no puede repetirse.
+- `fechaNacimiento` es opcional, debe usar `YYYY-MM-DD`, existir en el calendario y no ser futura.
+- `direccion` es opcional y admite máximo 255 caracteres.
+- El teléfono y el correo se comparan después de normalizar; un duplicado responde `409`.
+
+### Listado y búsqueda
+
+| Query | Formato | Ejemplo |
+| --- | --- | --- |
+| `buscar` | texto libre | `/api/pacientes?buscar=laura` |
+| `pagina` | entero positivo, por defecto `1` | `/api/pacientes?pagina=2` |
+| `limite` | entero entre `1` y `100`, por defecto `20` | `/api/pacientes?limite=50` |
+
+La búsqueda cubre nombre, apellido, correo y teléfono. La respuesta tiene la forma:
+
+```json
+{
+  "datos": [],
+  "total": 0,
+  "pagina": 1,
+  "limite": 20
+}
+```
+
+### Eliminación
+
+Un paciente solo se puede eliminar si no tiene citas ni solicitudes registradas. En caso contrario la API responde `409` e indica qué historial debe cerrarse primero; esto evita que las llaves foráneas en `CASCADE` borren el historial clínico.

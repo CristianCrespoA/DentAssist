@@ -1,6 +1,7 @@
 const { Op } = require('sequelize');
 const db = require('../models');
 const { aMinutos, esHoraValida, esFechaValida, seCruzan } = require('../utils/tiempo');
+const { errorNegocio } = require('../utils/errores');
 
 const ESTADOS = ['programada', 'confirmada', 'atendida', 'cancelada', 'no_asistio'];
 const ESTADOS_SIN_OCUPAR = ['cancelada', 'no_asistio'];
@@ -8,12 +9,6 @@ const ESTADOS_QUE_OCUPAN = {
   [Op.notIn]: ESTADOS_SIN_OCUPAR
 };
 const DURACION_POR_DEFECTO = 30;
-
-const errorNegocio = (mensaje, statusCode = 400) => {
-  const error = new Error(mensaje);
-  error.statusCode = statusCode;
-  return error;
-};
 
 const incluirRelaciones = [
   { model: db.Paciente, as: 'paciente', attributes: ['id', 'nombre', 'apellido', 'telefono'] },

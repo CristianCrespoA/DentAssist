@@ -1,8 +1,5 @@
 const citaService = require('../services/citaService');
-
-const manejarError = (res, error) => {
-  return res.status(error.statusCode || 400).json({ mensaje: error.message });
-};
+const { manejarError } = require('../utils/errores');
 
 const crear = async (req, res) => {
   try {

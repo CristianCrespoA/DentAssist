@@ -2,12 +2,7 @@ const bcrypt = require('bcryptjs');
 const db = require('../models');
 const { generarToken } = require('../utils/jwt');
 const { esPersonal } = require('../utils/roles');
-
-const errorNegocio = (mensaje, statusCode = 400) => {
-  const error = new Error(mensaje);
-  error.statusCode = statusCode;
-  return error;
-};
+const { errorNegocio } = require('../utils/errores');
 
 const login = async (email, password) => {
   const usuario = await db.Usuario.findOne({ where: { email } });
