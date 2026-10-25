@@ -1,8 +1,21 @@
+import { useAuth } from '../hooks/useAuth';
+
+const etiquetasRol = {
+  admin: 'Administrador',
+  recepcionista: 'Recepcionista',
+  paciente: 'Paciente',
+};
+
 function Home() {
+  const { usuario } = useAuth();
+
   return (
-    <div style={{ padding: '30px' }}>
-      <h1>Bienvenido</h1>
-      <p>Esta es la página de inicio.</p>
+    <div>
+      <h1>Bienvenido a DentAssist</h1>
+      <p>Hola, {usuario?.nombre}</p>
+      <p>
+        Rol: <strong>{etiquetasRol[usuario?.rol] || usuario?.rol}</strong>
+      </p>
     </div>
   );
 }

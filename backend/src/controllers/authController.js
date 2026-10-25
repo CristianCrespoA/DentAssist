@@ -11,6 +11,7 @@ const login = async (req, res) => {
     const resultado = await authService.login(email, password);
     return res.status(200).json(resultado);
   } catch (error) {
+    console.error('Login error:', error.message);
     return res.status(401).json({ mensaje: error.message });
   }
 };

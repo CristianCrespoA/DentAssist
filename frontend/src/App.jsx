@@ -1,19 +1,22 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import Navbar from './components/Navbar';
+import { AuthProvider } from './context/AuthContext';
+import PrivateRoute from './components/PrivateRoute';
+import Layout from './components/Layout';
 import Home from './pages/Home';
-import Usuarios from './pages/Usuarios';
-import Productos from './pages/Productos';
+import Login from './pages/Login';
 
 function App() {
   return (
-    <BrowserRouter>
-      <Navbar />
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/usuarios" element={<Usuarios />} />
-        <Route path="/productos" element={<Productos />} />
-      </Routes>
-    </BrowserRouter>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route element={<PrivateRoute><Layout /></PrivateRoute>}>
+            <Route path="/" element={<Home />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
 
