@@ -6,6 +6,9 @@ Dental practice management support system
 La plataforma web es de uso exclusivo del **personal de la clínica** (`admin` o `recepcionista`).
 Los pacientes gestionan sus citas y solicitudes por WhatsApp.
 
+La aplicación web vive en [`frontend/`](frontend/README.md) (React + Vite + Tailwind CSS). Incluye el
+sistema de diseño, el app shell responsive, las rutas protegidas y el cliente API compartido.
+
 Todas las rutas requieren el header `Authorization: Bearer <token>`.
 
 | Método | Ruta | Descripción |

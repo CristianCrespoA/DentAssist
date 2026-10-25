@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AuthContext } from './authContextBase';
+import { EVENTO_SESION_EXPIRADA } from '../services/api';
 
 // La plataforma web es de uso exclusivo del personal de la clínica.
 const ROLES_PERSONAL = ['admin', 'recepcionista'];
@@ -43,6 +44,24 @@ export const AuthProvider = ({ children }) => {
   };
 
   const estaAutenticado = () => !!sesion.token;
+
+  useEffect(() => {
+    const limpiarSesion = () => setSesion({ token: null, usuario: null });
+
+    const sincronizarSesion = (evento) => {
+      if (evento.key === 'token' || evento.key === 'usuario' || evento.key === null) {
+        setSesion(leerSesionGuardada());
+      }
+    };
+
+    window.addEventListener(EVENTO_SESION_EXPIRADA, limpiarSesion);
+    window.addEventListener('storage', sincronizarSesion);
+
+    return () => {
+      window.removeEventListener(EVENTO_SESION_EXPIRADA, limpiarSesion);
+      window.removeEventListener('storage', sincronizarSesion);
+    };
+  }, []);
 
   return (
     <AuthContext.Provider
