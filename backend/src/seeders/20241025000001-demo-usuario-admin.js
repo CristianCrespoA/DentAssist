@@ -13,11 +13,21 @@ module.exports = {
         rol: 'admin',
         createdAt: new Date(),
         updatedAt: new Date()
+      },
+      {
+        nombre: 'Cristian',
+        email: 'cristian@dentassist.com',
+        password: bcrypt.hashSync('cristian123', 10),
+        rol: 'recepcionista',
+        createdAt: new Date(),
+        updatedAt: new Date()
       }
     ], {});
   },
 
   async down(queryInterface, Sequelize) {
-    await queryInterface.bulkDelete('Usuarios', { email: 'admin@dentassist.com' }, {});
+    await queryInterface.bulkDelete('Usuarios', {
+      email: ['admin@dentassist.com', 'cristian@dentassist.com']
+    }, {});
   }
 };

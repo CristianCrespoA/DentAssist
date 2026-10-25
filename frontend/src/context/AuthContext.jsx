@@ -1,37 +1,53 @@
 import { useState } from 'react';
 import { AuthContext } from './authContextBase';
 
-const leerUsuarioGuardado = () => {
+// La plataforma web es de uso exclusivo del personal de la clínica.
+const ROLES_PERSONAL = ['admin', 'recepcionista'];
+
+const leerSesionGuardada = () => {
+  const sesionVacia = { token: null, usuario: null };
+
   try {
+    const token = localStorage.getItem('token');
     const guardado = localStorage.getItem('usuario');
-    return guardado ? JSON.parse(guardado) : null;
+
+    if (!token || !guardado) return sesionVacia;
+
+    const usuario = JSON.parse(guardado);
+
+    if (!ROLES_PERSONAL.includes(usuario?.rol)) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('usuario');
+      return sesionVacia;
+    }
+
+    return { token, usuario };
   } catch {
-    return null;
+    return sesionVacia;
   }
 };
 
 export const AuthProvider = ({ children }) => {
-  const [token, setToken] = useState(() => localStorage.getItem('token'));
-  const [usuario, setUsuario] = useState(leerUsuarioGuardado);
+  const [sesion, setSesion] = useState(leerSesionGuardada);
 
   const login = (tokenRecibido, usuarioRecibido) => {
     localStorage.setItem('token', tokenRecibido);
     localStorage.setItem('usuario', JSON.stringify(usuarioRecibido));
-    setToken(tokenRecibido);
-    setUsuario(usuarioRecibido);
+    setSesion({ token: tokenRecibido, usuario: usuarioRecibido });
   };
 
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('usuario');
-    setToken(null);
-    setUsuario(null);
+    setSesion({ token: null, usuario: null });
   };
 
-  const estaAutenticado = () => !!token;
+  const estaAutenticado = () => !!sesion.token;
 
   return (
-    <AuthContext.Provider value={{ usuario, token, login, logout, estaAutenticado }}>
+    <AuthContext.Provider
+      value={{ usuario: sesion.usuario, token: sesion.token, login, logout, estaAutenticado }}
+    >
       {children}
     </AuthContext.Provider>
   );

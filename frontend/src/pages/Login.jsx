@@ -48,7 +48,11 @@ const Login = () => {
   return (
     <div style={estilos.container}>
       <div style={estilos.card}>
-        <h2 style={estilos.titulo}>Iniciar Sesión</h2>
+        <h2 style={estilos.titulo}>Acceso del personal</h2>
+        <p style={estilos.subtitulo}>
+          Plataforma exclusiva para el personal de la clínica. Los pacientes gestionan sus citas
+          por WhatsApp.
+        </p>
         <form onSubmit={handleSubmit} style={estilos.form}>
           <div style={estilos.grupo}>
             <label style={estilos.label}>Email</label>
@@ -98,8 +102,15 @@ const estilos = {
   },
   titulo: {
     textAlign: 'center',
-    marginBottom: '30px',
+    marginBottom: '10px',
     color: '#333',
+  },
+  subtitulo: {
+    textAlign: 'center',
+    color: '#666',
+    fontSize: '14px',
+    marginTop: 0,
+    marginBottom: '25px',
   },
   form: {
     display: 'flex',

@@ -4,7 +4,6 @@ import { useAuth } from '../hooks/useAuth';
 const etiquetasRol = {
   admin: 'Administrador',
   recepcionista: 'Recepcionista',
-  paciente: 'Paciente',
 };
 
 function Navbar() {

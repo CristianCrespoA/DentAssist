@@ -1,5 +1,9 @@
 const authService = require('../services/authService');
 
+const manejarError = (res, error, statusCodePorDefecto) => {
+  return res.status(error.statusCode || statusCodePorDefecto).json({ mensaje: error.message });
+};
+
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -11,8 +15,7 @@ const login = async (req, res) => {
     const resultado = await authService.login(email, password);
     return res.status(200).json(resultado);
   } catch (error) {
-    console.error('Login error:', error.message);
-    return res.status(401).json({ mensaje: error.message });
+    return manejarError(res, error, 401);
   }
 };
 
@@ -27,7 +30,7 @@ const register = async (req, res) => {
     const resultado = await authService.register(req.body);
     return res.status(201).json(resultado);
   } catch (error) {
-    return res.status(400).json({ mensaje: error.message });
+    return manejarError(res, error, 400);
   }
 };
 
