@@ -3,6 +3,7 @@ const db = require('../models');
 const { errorNegocio } = require('../utils/errores');
 const { esFechaValida, esFechaFutura } = require('../utils/tiempo');
 const { normalizarFiltroTexto, patronContiene } = require('../utils/busqueda');
+const { parsearEnteroPositivo } = require('../utils/parametros');
 
 const ATRIBUTOS_PUBLICOS = [
   'id',
@@ -232,26 +233,6 @@ const crearPaciente = async (datos) => {
     }
     throw error;
   }
-};
-
-const parsearEnteroPositivo = (valor, campo, { porDefecto, maximo } = {}) => {
-  if (valor === undefined || valor === '') return porDefecto;
-
-  if (typeof valor !== 'string' || !/^\d+$/.test(valor)) {
-    throw errorNegocio(`El parámetro ${campo} debe ser un entero positivo`);
-  }
-
-  const numero = Number(valor);
-
-  if (!Number.isInteger(numero) || numero < 1) {
-    throw errorNegocio(`El parámetro ${campo} debe ser un entero positivo`);
-  }
-
-  if (maximo && numero > maximo) {
-    throw errorNegocio(`El parámetro ${campo} no puede superar ${maximo}`);
-  }
-
-  return numero;
 };
 
 const listarPacientes = async (filtros = {}) => {

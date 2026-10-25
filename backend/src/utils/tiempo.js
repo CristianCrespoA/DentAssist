@@ -31,6 +31,12 @@ const esFechaValida = (fecha) => {
 
 const seCruzan = (inicioA, finA, inicioB, finB) => inicioA < finB && inicioB < finA;
 
+const formatearMinutos = (minutos) => {
+  const horas = String(Math.floor(minutos / 60)).padStart(2, '0');
+  const resto = String(minutos % 60).padStart(2, '0');
+  return `${horas}:${resto}`;
+};
+
 const fechaHoyBogota = () => {
   const partes = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Bogota',
@@ -44,6 +50,19 @@ const fechaHoyBogota = () => {
   return `${valor('year')}-${valor('month')}-${valor('day')}`;
 };
 
+const horaActualBogota = () => {
+  const partes = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Bogota',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23'
+  }).formatToParts(new Date());
+
+  const valor = (tipo) => partes.find((parte) => parte.type === tipo).value;
+
+  return `${valor('hour')}:${valor('minute')}`;
+};
+
 const esFechaFutura = (fecha) => esFechaValida(fecha) && fecha > fechaHoyBogota();
 
 module.exports = {
@@ -52,5 +71,7 @@ module.exports = {
   esFechaValida,
   esFechaFutura,
   fechaHoyBogota,
+  formatearMinutos,
+  horaActualBogota,
   seCruzan
 };

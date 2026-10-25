@@ -48,6 +48,8 @@ El listado se devuelve ordenado por fecha y hora ascendente, con paciente, profe
 - `fecha` debe existir en el calendario y usar el formato `YYYY-MM-DD`.
 - `hora` acepta `HH:MM` o `HH:MM:SS`.
 - La duración se toma de `Servicio.duracionMinutos` (30 minutos si no está definida).
+- **La hora debe pertenecer al horario de atención** de la clínica para el día de la cita, estar alineada a bloques de `SLOT_MINUTOS` desde el inicio del rango y dejar que el servicio complete su duración antes del cierre o del receso de almuerzo. En caso contrario la API responde `400`.
+- Las citas con fecha anterior a hoy en `America/Bogota` se pueden editar sin exigir el horario actual, para no invalidar registros históricos.
 - **No se permiten cruces de horario**: ni el profesional ni el paciente pueden tener dos citas solapadas el mismo día.
 - Las citas en estado `cancelada` o `no_asistio` no ocupan horario.
 - Citas contiguas (por ejemplo 10:00–10:30 y 10:30) no se consideran cruce.
@@ -167,3 +169,71 @@ Cada servicio se devuelve con `id`, `nombre`, `descripcion`, `duracionMinutos` y
 - `401`: token ausente o inválido.
 - `403`: usuario sin rol de personal.
 - `404`: profesional o servicio inexistente.
+
+## Horario de atención y disponibilidad
+
+El horario se define en la tabla `HorariosAtencion`, con varios rangos por día para representar el receso de almuerzo. `diaSemana` usa el estándar `0 = domingo … 6 = sábado`. El seeder de demostración configura:
+
+| Día | Rangos |
+| --- | --- |
+| Lunes a viernes | `08:00–12:00` y `14:00–18:00` |
+| Sábado | `08:00–12:00` |
+| Domingo | Cerrado |
+
+El tamaño de los bloques se configura con la variable de entorno `SLOT_MINUTOS` (por defecto `30`). El valor debe ser un entero positivo; cualquier otro valor vuelve a `30`.
+
+### Consultar disponibilidad
+
+```
+GET /api/disponibilidad?fecha=2026-11-10&profesionalId=1&servicioId=3
+```
+
+Requiere `Authorization: Bearer <token>` y rol `admin` o `recepcionista`.
+
+| Query | Formato | Descripción |
+| --- | --- | --- |
+| `fecha` | `YYYY-MM-DD` | Día a consultar; no puede ser anterior a hoy en `America/Bogota` |
+| `profesionalId` | entero positivo | Profesional que atenderá |
+| `servicioId` | entero positivo | Servicio que define la duración |
+
+La respuesta incluye los rangos de atención del día, la duración del servicio y las horas de inicio disponibles:
+
+```json
+{
+  "fecha": "2026-11-10",
+  "cerrado": false,
+  "horario": [
+    { "inicio": "08:00", "fin": "12:00" },
+    { "inicio": "14:00", "fin": "18:00" }
+  ],
+  "duracionMinutos": 60,
+  "franjas": ["08:00", "09:00", "10:00", "11:00", "14:00", "15:00", "16:00", "17:00"]
+}
+```
+
+Reglas de cálculo:
+
+- Los bloques se generan cada `SLOT_MINUTOS` desde el inicio de cada rango.
+- Un bloque solo aparece si el servicio cabe completo dentro de un mismo rango; por eso un servicio de 60 minutos no ofrece `11:30` ni `17:30`.
+- Las citas del profesional en estado `programada`, `confirmada` o `atendida` bloquean los bloques que se cruzan con su duración. Las citas `cancelada` y `no_asistio` no bloquean.
+- Si la fecha es hoy, se descartan los bloques cuya hora de inicio ya pasó (hora actual en `America/Bogota`).
+- Si el día no tiene rangos activos, la respuesta es `200` con `cerrado: true`, `horario: []` y `franjas: []`.
+- Si hay horario pero no quedan cupos, la respuesta es `200` con `cerrado: false` y `franjas: []`.
+
+| Código | Significado |
+| --- | --- |
+| `200` | Disponibilidad calculada (aunque no haya cupos) |
+| `400` | Fecha inválida o pasada, o parámetros faltantes/mal formados |
+| `401` | Token ausente o inválido |
+| `403` | Usuario sin rol de personal |
+| `404` | Profesional o servicio inexistente |
+
+## Pruebas
+
+Desde `backend/`:
+
+```bash
+npm test
+```
+
+La suite usa el runner integrado de Node y cubre la conversión de horas, el cálculo del día de la semana, la generación de bloques para servicios de 30, 45 y 60 minutos, el receso de almuerzo, el cierre, los bloqueos por citas, los cupos ya transcurridos del día y la validación de horario de las citas.

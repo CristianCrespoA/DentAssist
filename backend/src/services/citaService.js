@@ -1,14 +1,25 @@
 const { Op } = require('sequelize');
 const db = require('../models');
-const { aMinutos, esHoraValida, esFechaValida, seCruzan } = require('../utils/tiempo');
+const {
+  aMinutos,
+  esHoraValida,
+  esFechaValida,
+  fechaHoyBogota,
+  formatearMinutos,
+  seCruzan
+} = require('../utils/tiempo');
 const { errorNegocio } = require('../utils/errores');
+const {
+  DURACION_POR_DEFECTO,
+  ESTADOS_SIN_OCUPAR,
+  estadoOcupaHorario
+} = require('../utils/agenda');
+const { validarHorarioCita } = require('./agendaService');
 
 const ESTADOS = ['programada', 'confirmada', 'atendida', 'cancelada', 'no_asistio'];
-const ESTADOS_SIN_OCUPAR = ['cancelada', 'no_asistio'];
 const ESTADOS_QUE_OCUPAN = {
   [Op.notIn]: ESTADOS_SIN_OCUPAR
 };
-const DURACION_POR_DEFECTO = 30;
 
 const incluirRelaciones = [
   { model: db.Paciente, as: 'paciente', attributes: ['id', 'nombre', 'apellido', 'telefono'] },
@@ -87,12 +98,6 @@ const asegurarReferencias = async ({ pacienteId, profesionalId, servicioId, soli
   return servicio;
 };
 
-const formatearMinutos = (minutos) => {
-  const horas = String(Math.floor(minutos / 60)).padStart(2, '0');
-  const resto = String(minutos % 60).padStart(2, '0');
-  return `${horas}:${resto}`;
-};
-
 const buscarCruce = async ({ pacienteId, profesionalId, fecha, hora, duracionMinutos, excluirId }) => {
   const citas = await db.Cita.findAll({
     where: {
@@ -138,7 +143,13 @@ const crearCita = async (datos) => {
   const servicio = await asegurarReferencias(datos);
   const duracionMinutos = Number(servicio.duracionMinutos) || DURACION_POR_DEFECTO;
 
-  const ocupaHorario = !ESTADOS_SIN_OCUPAR.includes(datos.estado || 'programada');
+  await validarHorarioCita({
+    fecha: datos.fecha,
+    hora: datos.hora,
+    duracionMinutos
+  });
+
+  const ocupaHorario = estadoOcupaHorario(datos.estado || 'programada');
 
   if (ocupaHorario) {
     await buscarCruce({
@@ -218,8 +229,19 @@ const actualizarCita = async (id, datos) => {
   };
 
   const servicio = await asegurarReferencias(actualizados);
+  const duracionMinutos = Number(servicio.duracionMinutos) || DURACION_POR_DEFECTO;
 
-  const ocupaHorario = !ESTADOS_SIN_OCUPAR.includes(actualizados.estado);
+  const hoy = fechaHoyBogota();
+  const esCitaHistorica = cita.fecha < hoy && actualizados.fecha < hoy;
+
+  await validarHorarioCita({
+    fecha: actualizados.fecha,
+    hora: actualizados.hora,
+    duracionMinutos,
+    permitirFechaPasada: esCitaHistorica
+  });
+
+  const ocupaHorario = estadoOcupaHorario(actualizados.estado);
 
   if (ocupaHorario) {
     await buscarCruce({
@@ -227,7 +249,7 @@ const actualizarCita = async (id, datos) => {
       profesionalId: actualizados.profesionalId,
       fecha: actualizados.fecha,
       hora: actualizados.hora,
-      duracionMinutos: Number(servicio.duracionMinutos) || DURACION_POR_DEFECTO,
+      duracionMinutos,
       excluirId: cita.id
     });
   }
