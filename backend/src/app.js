@@ -5,7 +5,17 @@ const routes = require('./routes');
 const app = express();
 
 app.use(cors());
-app.use(express.json());
+
+// Meta firma el cuerpo crudo del webhook. Se guarda el buffer original antes
+// de parsear para poder validar X-Hub-Signature-256 sin diferencias de formato.
+app.use(
+  express.json({
+    limit: '1mb',
+    verify: (req, res, buffer) => {
+      req.cuerpoCrudo = buffer;
+    }
+  })
+);
 
 app.use('/api', routes);
 

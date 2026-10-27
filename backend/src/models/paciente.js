@@ -2,12 +2,14 @@
 const {
   Model
 } = require('sequelize');
+const { normalizarTelefonoDigitos } = require('../utils/telefono');
 module.exports = (sequelize, DataTypes) => {
   class Paciente extends Model {
     static associate(models) {
       Paciente.belongsTo(models.Usuario, { foreignKey: 'usuarioId', as: 'usuario' });
       Paciente.hasMany(models.Solicitud, { foreignKey: 'pacienteId', as: 'solicitudes' });
       Paciente.hasMany(models.Cita, { foreignKey: 'pacienteId', as: 'citas' });
+      Paciente.hasMany(models.Conversacion, { foreignKey: 'pacienteId', as: 'conversaciones' });
     }
   }
   Paciente.init({
@@ -25,12 +27,13 @@ module.exports = (sequelize, DataTypes) => {
     },
     apellido: {
       type: DataTypes.STRING,
-      allowNull: false,
+      // Los pacientes creados desde WhatsApp pueden no tener apellido; el
+      // personal lo completa después. La API web sigue exigiendo el campo.
+      allowNull: true,
       validate: {
-        notEmpty: { msg: 'El apellido es obligatorio' },
         len: {
-          args: [1, 100],
-          msg: 'El apellido debe tener entre 1 y 100 caracteres'
+          args: [0, 100],
+          msg: 'El apellido no puede superar los 100 caracteres'
         }
       }
     },
@@ -44,6 +47,16 @@ module.exports = (sequelize, DataTypes) => {
           msg: 'El teléfono debe contener entre 7 y 15 dígitos'
         }
       }
+    },
+    telefonoNormalizado: {
+      type: DataTypes.STRING(15),
+      allowNull: true,
+      unique: true
+    },
+    origen: {
+      type: DataTypes.ENUM('web', 'whatsapp', 'manual'),
+      allowNull: false,
+      defaultValue: 'manual'
     },
     correo: {
       type: DataTypes.STRING,
@@ -74,6 +87,15 @@ module.exports = (sequelize, DataTypes) => {
       }
     }
   }, {
+    hooks: {
+      beforeValidate(paciente) {
+        const normalizado = normalizarTelefonoDigitos(paciente.telefono);
+
+        if (normalizado) {
+          paciente.telefonoNormalizado = normalizado;
+        }
+      }
+    },
     sequelize,
     modelName: 'Paciente',
     tableName: 'Pacientes'

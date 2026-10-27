@@ -11,6 +11,10 @@ sistema de diseño, el app shell responsive, las rutas protegidas, el cliente AP
 CRUD de pacientes, la agenda por día y por todas las fechas, el formulario de crear/editar citas
 con disponibilidad en vivo y la bandeja de solicitudes por estado con su historial y acciones.
 
+El backend también expone el **canal base de WhatsApp** (webhook de Meta, persistencia de
+conversaciones y mensajes, aviso de privacidad y simulador local). Ver
+[`Canal de WhatsApp`](#canal-de-whatsapp).
+
 Todas las rutas requieren el header `Authorization: Bearer <token>`.
 
 | Método | Ruta | Descripción |
@@ -227,6 +231,7 @@ Todas las rutas requieren el header `Authorization: Bearer <token>` y están dis
 ### Reglas de validación
 
 - `nombre` y `apellido` son obligatorios y admiten máximo 100 caracteres.
+- Los pacientes creados automáticamente desde WhatsApp pueden tener `apellido` vacío y `origen = whatsapp`; el personal lo completa después. Los pacientes creados desde la web usan `origen = web`.
 - `telefono` es obligatorio, debe contener entre 7 y 15 dígitos y no puede repetirse.
 - `correo` es opcional, debe tener formato válido, máximo 255 caracteres y no puede repetirse.
 - `fechaNacimiento` es opcional, debe usar `YYYY-MM-DD`, existir en el calendario y no ser futura.
@@ -364,6 +369,157 @@ Reglas de cálculo:
 | `403` | Usuario sin rol de personal |
 | `404` | Profesional o servicio inexistente |
 
+## Canal de WhatsApp
+
+Integración con la **WhatsApp Cloud API** de Meta para recibir mensajes, persistir la conversación y responder. Este PR implementa la base del canal: webhook, modelos, envío, privacidad y simulador. Los flujos de agendamiento se construyen sobre este canal en PR posteriores.
+
+### Variables de entorno
+
+Se configuran únicamente en `backend/.env`; **nunca** deben llegar al frontend ni a una variable de Vite.
+
+| Variable | Descripción |
+| --- | --- |
+| `WHATSAPP_TOKEN` | Token de acceso de la app de Meta. Los tokens de prueba caducan (~24 h). |
+| `WHATSAPP_PHONE_NUMBER_ID` | ID del número de teléfono de prueba. |
+| `WHATSAPP_VERIFY_TOKEN` | Texto secreto que se escribe al configurar el webhook en Meta. |
+| `WHATSAPP_APP_SECRET` | App Secret de Meta; se usa para validar `X-Hub-Signature-256`. |
+| `WHATSAPP_API_VERSION` | Versión de Graph API. Por defecto `v23.0`. |
+| `WHATSAPP_SIMULADOR` | `1` habilita el simulador en producción. En desarrollo/pruebas está activo por defecto. |
+
+Si faltan `WHATSAPP_TOKEN` o `WHATSAPP_PHONE_NUMBER_ID`, el envío falla de forma segura y el mensaje saliente queda como `fallido`. Si falta `WHATSAPP_APP_SECRET`, el webhook responde `503`.
+
+### Alta del canal en Meta (modo prueba)
+
+1. Crear una app en [Meta for Developers](https://developers.facebook.com/apps) de tipo **Business** y agregar el producto **WhatsApp**.
+2. En **WhatsApp → API Setup**, copiar el **Phone number ID** del número de prueba y el **WhatsApp Business Account ID**.
+3. En el selector **To**, agregar y verificar hasta 5 números destinatarios de prueba.
+4. Generar el **token temporal** (caduca en ~24 h) y guardarlo en `WHATSAPP_TOKEN`.
+5. En **App settings → Basic**, copiar el **App Secret** en `WHATSAPP_APP_SECRET`.
+6. Definir un texto secreto propio en `WHATSAPP_VERIFY_TOKEN` y reiniciar el backend.
+7. Exponer el backend por HTTPS (por ejemplo `ngrok http 3000`) y, en **WhatsApp → Configuration → Webhook**, usar `https://TU-DOMINIO/api/whatsapp/webhook` con el mismo verify token. Verificar y guardar, y suscribirse al campo **messages**.
+8. Enviar un mensaje desde un número verificado al número de prueba. El backend debe crear la conversación y el paciente, guardar el entrante, responder el aviso de privacidad y guardar el saliente.
+
+> **El botón «Prueba» del webhook no valida la suscripción.** Meta inyecta ese evento de ejemplo sin pasar por la suscripción, así que funciona aunque el campo `messages` no esté marcado; los mensajes reales, en cambio, nunca llegan. Para confirmarlo:
+>
+> ```bash
+> curl -s "https://graph.facebook.com/v23.0/APP_ID/subscriptions?fields=object,active,fields&access_token=APP_ID|APP_SECRET"
+> ```
+>
+> La respuesta debe incluir `"fields": [{ "name": "messages" }]`. Si `fields` no aparece, suscríbelo con `POST /APP_ID/subscriptions` (`object=whatsapp_business_account`, `callback_url`, `verify_token`, `fields=messages`) o marcando **messages** en el panel y guardando.
+>
+> Además, el evento real solo se entrega si la cuenta de WhatsApp Business está suscrita a la app (`GET /WABA_ID/subscribed_apps`).
+
+Para producción se necesita un número propio, verificación del negocio, token permanente de un usuario del sistema, método de pago, plantillas aprobadas y una URL HTTPS estable.
+
+### Límites del sandbox de Meta
+
+- La **ventana de servicio es de 24 horas** desde el último mensaje del paciente. Dentro de ella se puede responder con texto libre.
+- Fuera de la ventana solo se pueden enviar **plantillas aprobadas** por Meta. Las plantillas no se implementan en este PR: el saliente se guarda como `fallido`, con `requierePlantilla = true` y el motivo correspondiente.
+- El número de prueba solo puede escribir a **destinatarios verificados** (hasta 5 en la configuración de prueba).
+- El token temporal de prueba caduca aproximadamente cada 24 horas; para producción se usa un token permanente de usuario del sistema.
+- Meta reintenta el webhook si la respuesta tarda o falla. Por eso el `POST` responde `200` de inmediato y la idempotencia se controla con `waMessageId`.
+
+### Endpoints
+
+| Método | Ruta | Descripción |
+| --- | --- | --- |
+| `GET` | `/api/whatsapp/webhook` | Verificación de Meta (`hub.mode`, `hub.verify_token`, `hub.challenge`) |
+| `POST` | `/api/whatsapp/webhook` | Recepción de mensajes y estados, firmada por Meta |
+| `POST` | `/api/whatsapp/simular` | Inyecta un mensaje local por el mismo pipeline |
+
+Los dos endpoints del webhook son públicos porque Meta no envía JWT; se autentican con el verify token y la firma HMAC. El simulador no requiere autenticación, pero solo existe fuera de producción o con `WHATSAPP_SIMULADOR=1`.
+
+#### Verificación
+
+```
+GET /api/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=TU_TOKEN&hub.challenge=12345
+```
+
+- Token y modo correctos: `200` con el challenge en texto plano.
+- Token o modo incorrectos: `403`.
+
+#### Recepción
+
+```
+POST /api/whatsapp/webhook
+X-Hub-Signature-256: sha256=<hmac>
+Content-Type: application/json
+```
+
+- La firma se calcula con HMAC SHA-256 sobre el **cuerpo crudo** y se compara en tiempo constante.
+- Firma ausente o inválida: `403`. Sin App Secret configurado: `503`.
+- Firma válida: `200 { "recibido": true }` inmediato; el evento se procesa después con `setImmediate`.
+- Solo se procesan eventos de `whatsapp_business_account`; los mensajes y los estados se recorren por separado.
+- Un `waMessageId` ya guardado se ignora: no crea conversación, mensaje ni respuesta nueva.
+- Estados `sent`, `delivered`, `read` y `failed` actualizan el mensaje saliente. Los eventos desordenados no hacen retroceder el estado.
+
+#### Simulador local
+
+```bash
+curl -X POST http://localhost:3000/api/whatsapp/simular \
+  -H "Content-Type: application/json" \
+  -d '{"telefono":"3001234567","texto":"Hola, quiero una cita"}'
+```
+
+También acepta `{"telefono":"3001234567","boton":"Agendar cita"}`. La respuesta incluye el `conversacionId`, el `mensajeId` y las respuestas generadas:
+
+```json
+{
+  "conversacionId": 1,
+  "mensajeId": 1,
+  "duplicado": false,
+  "respuestas": [
+    {
+      "id": 2,
+      "direccion": "saliente",
+      "tipo": "texto",
+      "contenido": "¡Hola! Soy el asistente de DentAssist...",
+      "estado": "enviado",
+      "requierePlantilla": false,
+      "motivo": null
+    }
+  ]
+}
+```
+
+El simulador no llama a Meta: genera identificadores `simulado-*`, usa el mismo pipeline y permite probar el flujo sin credenciales.
+
+#### Inspección de conversaciones
+
+Todavía no hay endpoint de listado. Para revisar lo último que entró y salió, con un script de solo lectura:
+
+```bash
+cd backend
+npm run whatsapp:verificar            # últimas 10 conversaciones
+npm run whatsapp:verificar -- 573001234567
+```
+
+Muestra cada mensaje con su dirección, estado, `waMessageId`, `motivoFallo` y `requierePlantilla`. Si no hay conversaciones, el webhook no ha procesado nada.
+
+### Datos y estados
+
+- `Conversacions`: `telefono` único normalizado a dígitos, `pacienteId` opcional, `estadoFlujo`, `contexto` JSON, `ultimaActividad` y `consentimientoAceptadoEn`.
+- `Mensajes`: `conversacionId`, `waMessageId` único, `direccion` (`entrante`/`saliente`), `tipo`, `contenido`, `payload` JSON, `estado`, `ocurridoEn`, `estadoActualizadoEn`, `motivoFallo` y `requierePlantilla`. Tiene índice por conversación y fecha.
+- `Pacientes`: se agrega `origen` (`web`, `whatsapp`, `manual`) y `telefonoNormalizado` único.
+
+| Estado | Significado |
+| --- | --- |
+| `recibido` | Mensaje entrante guardado |
+| `enviado` | Meta aceptó el saliente |
+| `entregado` | Meta lo entregó al dispositivo |
+| `leido` | El paciente lo abrió |
+| `fallido` | No se pudo enviar o la entrega falló; el motivo queda sin datos sensibles |
+
+### Privacidad (Ley 1581)
+
+- En el primer mensaje de cada conversación se envía el aviso de tratamiento de datos. La aceptación es implícita al continuar la conversación y se guarda en `consentimientoAceptadoEn` solo si el aviso se envió correctamente.
+- Los logs usan únicamente eventos e identificadores internos (`conversacionId`, `mensajeId`, `pacienteId`), nunca teléfono, nombre, contenido ni payload.
+- Si llega un audio, imagen, video, documento, sticker, ubicación u otro tipo no soportado, se responde con un texto que indica que por ahora la atención es por texto o botones. El mensaje original se conserva en `payload`.
+
+### Riesgo de procesamiento en memoria
+
+El webhook responde `200` y procesa el evento con `setImmediate` dentro del mismo proceso. Si el proceso se reinicia justo después de responder, el evento ya confirmado a Meta puede perderse. Para producción se recomienda mover el procesamiento a una cola persistente (por ejemplo BullMQ/Redis o una tabla de eventos pendientes) con reintentos e idempotencia.
+
 ## Pruebas
 
 Desde `backend/`:
@@ -372,4 +528,4 @@ Desde `backend/`:
 npm test
 ```
 
-La suite usa el runner integrado de Node y cubre la conversión de horas, el cálculo del día de la semana, la generación de bloques para servicios de 30, 45 y 60 minutos, el receso de almuerzo, el cierre, los bloqueos por citas, los cupos ya transcurridos del día y la validación de horario de las citas. Las pruebas de citas cubren crear y editar con y sin cruce, el día cerrado, la agenda llena, eliminar una cita cancelada, el rechazo `409` al eliminar una cita programada y el `404` de una cita inexistente. Las pruebas de solicitudes cubren las transiciones permitidas y prohibidas, el comentario obligatorio, el historial con usuario, los efectos de cancelación y reprogramación, el rollback ante un cruce con alternativas, los filtros y la paginación, los permisos de staff y la migración con datos previos y su `down`.
+La suite usa el runner integrado de Node y cubre la conversión de horas, el cálculo del día de la semana, la generación de bloques para servicios de 30, 45 y 60 minutos, el receso de almuerzo, el cierre, los bloqueos por citas, los cupos ya transcurridos del día y la validación de horario de las citas. Las pruebas de citas cubren crear y editar con y sin cruce, el día cerrado, la agenda llena, eliminar una cita cancelada, el rechazo `409` al eliminar una cita programada y el `404` de una cita inexistente. Las pruebas de solicitudes cubren las transiciones permitidas y prohibidas, el comentario obligatorio, el historial con usuario, los efectos de cancelación y reprogramación, el rollback ante un cruce con alternativas, los filtros y la paginación, los permisos de staff y la migración con datos previos y su `down`. Las pruebas de WhatsApp cubren la verificación del webhook, la firma HMAC, la idempotencia por `waMessageId`, la creación y reutilización del paciente, el aviso y consentimiento, los estados `sent`/`delivered`/`read`/`failed`, los tipos no soportados, la ventana de 24 h, los reintentos del envío, el simulador, los logs sin datos personales y la migración del canal.

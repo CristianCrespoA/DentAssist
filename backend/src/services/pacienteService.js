@@ -4,6 +4,11 @@ const { errorNegocio } = require('../utils/errores');
 const { esFechaValida, esFechaFutura } = require('../utils/tiempo');
 const { normalizarFiltroTexto, patronContiene } = require('../utils/busqueda');
 const { parsearEnteroPositivo } = require('../utils/parametros');
+const {
+  TELEFONO_MAX,
+  TELEFONO_MIN,
+  normalizarTelefonoDigitos
+} = require('../utils/telefono');
 
 const ATRIBUTOS_PUBLICOS = [
   'id',
@@ -13,6 +18,7 @@ const ATRIBUTOS_PUBLICOS = [
   'correo',
   'fechaNacimiento',
   'direccion',
+  'origen',
   'createdAt',
   'updatedAt'
 ];
@@ -20,8 +26,6 @@ const ATRIBUTOS_PUBLICOS = [
 const NOMBRE_MAX = 100;
 const CORREO_MAX = 255;
 const DIRECCION_MAX = 255;
-const TELEFONO_MIN = 7;
-const TELEFONO_MAX = 15;
 const PAGINA_POR_DEFECTO = 1;
 const LIMITE_POR_DEFECTO = 20;
 const LIMITE_MAX = 100;
@@ -74,13 +78,7 @@ const normalizarTelefono = (valor) => {
     throw errorNegocio('El teléfono debe ser texto o un número');
   }
 
-  const digitos = String(valor).replace(/\D/g, '');
-  const sinPrefijoInternacional = digitos.startsWith('00') ? digitos.slice(2) : digitos;
-
-  // En Colombia los móviles y fijos tienen 10 dígitos; se guardan con el indicativo 57.
-  const normalizado = /^(3\d|60\d)\d{8}$/.test(sinPrefijoInternacional)
-    ? `57${sinPrefijoInternacional}`
-    : sinPrefijoInternacional;
+  const normalizado = normalizarTelefonoDigitos(valor);
 
   if (!normalizado) {
     throw errorNegocio('El teléfono es obligatorio');
@@ -225,7 +223,7 @@ const crearPaciente = async (datos) => {
   await asegurarDatosUnicos(normalizados);
 
   try {
-    const paciente = await db.Paciente.create(normalizados);
+    const paciente = await db.Paciente.create({ ...normalizados, origen: 'web' });
     return obtenerPaciente(paciente.id);
   } catch (error) {
     if (error.name === 'SequelizeUniqueConstraintError') {

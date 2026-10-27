@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "whatsapp:verificar": "node scripts/verificar-whatsapp.js"
   },
   "keywords": [],
   "type": "commonjs",
