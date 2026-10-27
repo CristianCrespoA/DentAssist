@@ -19,16 +19,31 @@ function Table({
   emptyState,
   loading = false,
   loadingLabel = 'Cargando datos',
+  onRowClick,
+  rowLabel,
   className,
   rowClassName,
 }) {
   const columnas = Array.isArray(columns) ? columns : [];
   const filas = Array.isArray(rows) ? rows : [];
+  const filasInteractivas = typeof onRowClick === 'function';
 
   const claveDe = (fila, indice) => {
     if (getRowKey) return getRowKey(fila, indice);
     return fila?.id ?? indice;
   };
+
+  const etiquetaDe = (fila) => (rowLabel ? rowLabel(fila) : undefined);
+
+  const manejarTeclaFila = (evento, fila) => {
+    if (evento.key !== 'Enter' && evento.key !== ' ') return;
+
+    evento.preventDefault();
+    onRowClick(fila);
+  };
+
+  const clasesInteraccion =
+    'cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary-600';
 
   if (loading) {
     return (
@@ -80,6 +95,7 @@ function Table({
                   <th
                     key={columna.key}
                     scope="col"
+                    aria-label={columna.headerLabel || undefined}
                     className={cn(
                       'whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-wide text-neutral-500',
                       columna.align === 'right' && 'text-right',
@@ -95,8 +111,17 @@ function Table({
               {filas.map((fila, indice) => (
                 <tr
                   key={claveDe(fila, indice)}
+                  onClick={filasInteractivas ? () => onRowClick(fila) : undefined}
+                  onKeyDown={
+                    filasInteractivas
+                      ? (evento) => manejarTeclaFila(evento, fila)
+                      : undefined
+                  }
+                  tabIndex={filasInteractivas ? 0 : undefined}
+                  aria-label={filasInteractivas ? etiquetaDe(fila) : undefined}
                   className={cn(
                     'transition-colors hover:bg-neutral-50',
+                    filasInteractivas && clasesInteraccion,
                     typeof rowClassName === 'function'
                       ? rowClassName(fila)
                       : rowClassName,
@@ -125,9 +150,21 @@ function Table({
         {filas.map((fila, indice) => (
           <li
             key={claveDe(fila, indice)}
+            role={filasInteractivas ? 'button' : undefined}
+            tabIndex={filasInteractivas ? 0 : undefined}
+            onClick={filasInteractivas ? () => onRowClick(fila) : undefined}
+            onKeyDown={
+              filasInteractivas
+                ? (evento) => manejarTeclaFila(evento, fila)
+                : undefined
+            }
+            aria-label={filasInteractivas ? etiquetaDe(fila) : undefined}
             className={cn(
               'rounded-card border border-neutral-200 bg-white p-4 shadow-card',
-              typeof rowClassName === 'function' ? rowClassName(fila) : rowClassName,
+              filasInteractivas && clasesInteraccion,
+              typeof rowClassName === 'function'
+                ? rowClassName(fila)
+                : rowClassName,
             )}
           >
             <div className="min-w-0 text-sm font-semibold text-neutral-900">

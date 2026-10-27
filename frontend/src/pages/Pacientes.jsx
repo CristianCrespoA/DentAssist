@@ -251,6 +251,11 @@ function Pacientes() {
     navigate(`/agenda?pacienteId=${paciente.id}`);
   };
 
+  const verTodasLasCitas = (paciente) => {
+    setDetalleId(null);
+    navigate(`/agenda?vista=todas&pacienteId=${paciente.id}`);
+  };
+
   const columnas = [
     {
       key: 'nombre',
@@ -525,6 +530,7 @@ function Pacientes() {
           paciente={detalle}
           onClose={() => setDetalleId(null)}
           onVerAgenda={verAgenda}
+          onVerTodasLasCitas={verTodasLasCitas}
         />
       ) : null}
 

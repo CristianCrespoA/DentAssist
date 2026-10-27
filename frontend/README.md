@@ -63,7 +63,7 @@ No se usan estilos inline. Las clases condicionales se combinan con `cn` desde
 | `Input`, `Select`, `Textarea` | Controles con estados de error y foco visibles; `Input` admite adornos al inicio y al final |
 | `Field` | Etiqueta, ayuda y error asociados con `id`, `aria-invalid` y `aria-describedby` |
 | `Card` | Contenedor con `CardHeader`, `CardTitle`, `CardDescription`, `CardContent` y `CardFooter` |
-| `Table` | Tabla en escritorio y tarjetas apiladas en móvil |
+| `Table` | Tabla en escritorio y tarjetas apiladas en móvil; filas clicables con foco y activación por `Enter`/`Espacio` |
 | `Badge` | Estados con variantes de color |
 | `Modal` | Diálogo Headless UI con Esc, trampa de foco, `aria-labelledby` y descripción |
 | `ConfirmDialog` | Confirmación con foco inicial en «Cancelar» y rol `alertdialog` |
@@ -75,8 +75,9 @@ No se usan estilos inline. Las clases condicionales se combinan con `cn` desde
 ## App shell y rutas
 
 - `/` redirige a `/agenda`.
-- `/agenda` y `/solicitudes` son rutas protegidas y muestran una página
-  provisional «en construcción» hasta los PRs 6 y 9.
+- `/agenda` es una ruta protegida con la agenda por día y por todas las fechas.
+- `/solicitudes` es una ruta protegida y muestra una página provisional «en
+  construcción» hasta el PR 9.
 - `/pacientes` es una ruta protegida con el CRUD completo de pacientes.
 - Cualquier ruta desconocida redirige a `/agenda` (sin 404).
 - `/login` es pública; si ya hay sesión redirige a `/agenda`.
@@ -115,9 +116,10 @@ La sesión se sincroniza entre pestañas mediante el evento `storage`.
   correspondiente y el formulario permanece abierto.
 - **Teléfono:** se muestra con el indicativo `+57`; al editar se oculta el
   prefijo almacenado y el backend lo vuelve a normalizar al guardar.
-- **Detalle:** modal con todos los datos, enlaces `tel:`/`mailto:` y el botón
-  «Ver agenda», que navega a `/agenda?pacienteId=ID` (el filtro de la agenda se
-  implementa en el PR 6).
+- **Detalle:** modal con todos los datos, enlaces `tel:`/`mailto:` y dos accesos
+  a la agenda: «Ver agenda del día» navega a `/agenda?pacienteId=ID` y «Todas
+  sus citas» a `/agenda?vista=todas&pacienteId=ID`, ambos con el paciente
+  filtrado.
 - **Eliminar:** confirmación con foco inicial en «Cancelar». Si la API responde
   `409` porque el paciente tiene citas o solicitudes, el motivo se explica dentro
   del diálogo y no se cierra.
@@ -130,6 +132,44 @@ La lógica de formato, validación y traducción de mensajes del backend vive en
 `src/lib/pacientes.js`; los componentes de la pantalla están en
 `src/components/pacientes/`.
 
+## Agenda
+
+`/agenda` es la pantalla principal del personal y opera el listado de citas del
+PR 2 (`src/services/citas.js`):
+
+- **Vistas:** el conmutador «Día» / «Todas las fechas» cambia entre la agenda de
+  una fecha y el listado completo agrupado por día, de la más antigua a la más
+  reciente. Cambiar de vista conserva paciente, profesional y estado.
+- **Fecha:** en la vista por día se usa el día actual en `America/Bogota` por
+  defecto. El selector de fecha y los botones «Anterior», «Siguiente» y «Hoy»
+  cambian el día consultado.
+- **URL como fuente de verdad:** `?fecha=YYYY-MM-DD&pacienteId=&profesionalId=&estado=`
+  para la vista por día y `?vista=todas&pacienteId=&profesionalId=&estado=` para
+  todas las fechas, mediante `useSearchParams`, para conservar el estado al
+  refrescar, compartir enlaces y abrir la agenda desde la ficha de un paciente.
+  Una fecha inválida o ausente se normaliza a hoy y los parámetros desconocidos
+  se eliminan con `replace`.
+- **Filtros:** paciente con combobox de búsqueda remota (debounce de 300 ms,
+  navegación con flechas/`Enter`/`Esc` y cierre al hacer clic fuera),
+  profesional desde el catálogo (`src/services/profesionales.js`) y estado.
+  «Limpiar filtros» solo quita paciente, profesional y estado. Una sola petición
+  a `/api/citas` por cambio; en la vista combinada se omite `fecha`.
+- **Listado:** ordenado por fecha y hora, con inicio y fin calculados a partir de
+  `servicio.duracionMinutos` (30 por defecto), paciente, profesional, servicio,
+  badge de estado y observaciones abreviadas. En la vista combinada cada día
+  tiene su encabezado con el total de citas. Incluye resumen con total, rango
+  horario del día o cantidad de días y conteo por estado.
+- **Detalle:** clic, `Enter` o `Espacio` sobre una fila (o tarjeta en móvil) abre
+  un panel de solo lectura con los datos completos. «Editar» muestra un aviso de
+  que la edición llega en el PR 7.
+- **Estados:** carga, vacío («no hay citas para esta fecha», «sin citas con
+  estos filtros» o «no hay citas registradas»), error de red con reintento y sin
+  datos de otra fecha. Cuando hay un paciente filtrado sin citas ese día, el
+  vacío ofrece «Ver todas las fechas».
+
+La lógica de fechas, agrupación, estados, rangos y resumen vive en
+`src/lib/agenda.js`; los componentes están en `src/components/agenda/`.
+
 ## Accesibilidad y responsive
 
 - Foco visible en enlaces, botones y controles.
@@ -140,4 +180,8 @@ La lógica de formato, validación y traducción de mensajes del backend vive en
 - Objetivos táctiles de al menos 32–40 px y layouts probados a 360, 768 y
   1280 px.
 - Las tablas se convierten en tarjetas por debajo del breakpoint `md`.
+- Las filas clicables de la agenda son enfocables y se activan con `Enter` o
+  `Espacio`; el conmutador de vista anuncia su estado con `aria-pressed`, el
+  selector de paciente anuncia su valor actual y los encabezados de columna solo
+  visuales conservan su nombre accesible.
 - Se respeta `prefers-reduced-motion`.

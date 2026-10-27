@@ -7,8 +7,8 @@ La plataforma web es de uso exclusivo del **personal de la clínica** (`admin` o
 Los pacientes gestionan sus citas y solicitudes por WhatsApp.
 
 La aplicación web vive en [`frontend/`](frontend/README.md) (React + Vite + Tailwind CSS). Incluye el
-sistema de diseño, el app shell responsive, las rutas protegidas, el cliente API compartido y el
-CRUD de pacientes.
+sistema de diseño, el app shell responsive, las rutas protegidas, el cliente API compartido, el
+CRUD de pacientes y la agenda por día y por todas las fechas.
 
 Todas las rutas requieren el header `Authorization: Bearer <token>`.
 
@@ -69,6 +69,20 @@ El listado se devuelve ordenado por fecha y hora ascendente, con paciente, profe
 | `403` | El usuario no es personal de la clínica |
 | `404` | La cita o una referencia (paciente, profesional, servicio) no existe |
 | `409` | Cruce de horario |
+
+### Interfaz web de agenda
+
+La ruta `/agenda` del frontend opera el listado de citas:
+
+- **Vistas:** «Día» muestra la agenda de una fecha concreta y «Todas las fechas» muestra todas las citas agrupadas por día, de la más antigua a la más reciente. Cambiar de vista conserva los filtros.
+- **Fecha:** en la vista por día se usa el día actual en `America/Bogota` por defecto. El selector de fecha y los botones «Anterior», «Siguiente» y «Hoy» cambian el día consultado.
+- **URL como fuente de verdad:** `?fecha=YYYY-MM-DD&pacienteId=&profesionalId=&estado=` para la vista por día y `?vista=todas&pacienteId=&profesionalId=&estado=` para todas las fechas. Un enlace conserva los filtros al refrescar o compartir; una fecha inválida o ausente se normaliza a hoy y los parámetros desconocidos se eliminan con `replace`.
+- **Filtros:** paciente con búsqueda remota y debounce de 300 ms, profesional desde el catálogo y estado. «Limpiar filtros» solo quita paciente, profesional y estado.
+- **Sin N+1:** cada cambio de vista, fecha o filtro hace una única petición a `/api/citas` (sin `fecha` en la vista combinada). El catálogo de profesionales se carga una vez y el paciente del filtro se resuelve con `GET /api/pacientes/:id`.
+- **Listado:** ordenado por fecha y hora, con inicio y fin calculados a partir de `servicio.duracionMinutos` (30 por defecto), paciente, profesional, servicio, estado como badge y observaciones abreviadas.
+- **Resumen:** total de citas, rango horario del día o cantidad de días con citas, y conteo por estado.
+- **Detalle:** clic o `Enter` sobre una fila abre un panel de solo lectura con los datos completos. El botón «Editar» se habilita en el PR 7.
+- **Estados:** carga, vacío («no hay citas para esta fecha», «sin citas con estos filtros» o «no hay citas registradas»), error con reintento y tabla en escritorio con tarjetas en móvil. Si un paciente filtrado no tiene citas ese día, el vacío ofrece «Ver todas las fechas».
 
 ## API de pacientes
 
@@ -140,7 +154,7 @@ La ruta `/pacientes` del frontend opera esta API:
 
 - Listado paginado (20 por página) con búsqueda por nombre, apellido, correo o teléfono y debounce de 300 ms.
 - Alta y edición en un modal con validación en cliente equivalente a la del backend; los errores del servidor se muestran junto al campo y un `409` mantiene el formulario abierto.
-- Detalle con todos los datos y acceso directo a la agenda del paciente mediante `/agenda?pacienteId=ID` (el filtro de agenda llega en el PR 6).
+- Detalle con todos los datos y acceso directo a la agenda del paciente: «Ver agenda del día» abre `/agenda?pacienteId=ID` y «Todas sus citas» abre `/agenda?vista=todas&pacienteId=ID`, con el filtro aplicado.
 - Eliminación con confirmación; si el paciente tiene citas o solicitudes, el `409` se explica dentro del diálogo.
 - Estados de carga, vacío, error de red con reintento, `401`/`403` y toasts de éxito o fallo.
 

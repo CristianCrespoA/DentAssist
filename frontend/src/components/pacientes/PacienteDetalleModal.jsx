@@ -1,4 +1,4 @@
-import { CalendarDays } from 'lucide-react';
+import { CalendarDays, CalendarRange } from 'lucide-react';
 import { cn } from '../../lib/cn';
 import {
   formatearFecha,
@@ -20,7 +20,12 @@ function Dato({ etiqueta, valor, className }) {
   );
 }
 
-function PacienteDetalleModal({ paciente, onClose, onVerAgenda }) {
+function PacienteDetalleModal({
+  paciente,
+  onClose,
+  onVerAgenda,
+  onVerTodasLasCitas,
+}) {
   const telefono = formatearTelefono(paciente.telefono);
   const enlaceTelefono = hrefTelefono(paciente.telefono);
 
@@ -37,10 +42,17 @@ function PacienteDetalleModal({ paciente, onClose, onVerAgenda }) {
             Cerrar
           </Button>
           <Button
+            variant="secondary"
             onClick={() => onVerAgenda(paciente)}
             leftIcon={<CalendarDays aria-hidden="true" />}
           >
-            Ver agenda
+            Ver agenda del día
+          </Button>
+          <Button
+            onClick={() => onVerTodasLasCitas(paciente)}
+            leftIcon={<CalendarRange aria-hidden="true" />}
+          >
+            Todas sus citas
           </Button>
         </>
       }
