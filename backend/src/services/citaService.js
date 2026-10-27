@@ -264,6 +264,12 @@ const eliminarCita = async (id) => {
 
   if (!cita) throw errorNegocio(`La cita ${id} no existe`, 404);
 
+  // REQ-06: el historial de una cita activa no se borra; primero debe
+  // cancelarse. La regla vive en el backend para que no dependa del cliente.
+  if (cita.estado !== 'cancelada') {
+    throw errorNegocio('Solo se pueden eliminar citas canceladas', 409);
+  }
+
   await cita.destroy();
 
   return cita;

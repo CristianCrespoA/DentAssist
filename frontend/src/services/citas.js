@@ -23,3 +23,11 @@ export const listarCitas = (
 
 export const obtenerCita = (id, opciones) =>
   api.get(`/citas/${encodeURIComponent(id)}`, opciones);
+
+export const crearCita = (datos) => api.post('/citas', datos);
+
+export const actualizarCita = (id, datos) =>
+  api.put(`/citas/${encodeURIComponent(id)}`, datos);
+
+export const eliminarCita = (id) =>
+  api.delete(`/citas/${encodeURIComponent(id)}`);

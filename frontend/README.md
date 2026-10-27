@@ -160,15 +160,56 @@ PR 2 (`src/services/citas.js`):
   tiene su encabezado con el total de citas. Incluye resumen con total, rango
   horario del día o cantidad de días y conteo por estado.
 - **Detalle:** clic, `Enter` o `Espacio` sobre una fila (o tarjeta en móvil) abre
-  un panel de solo lectura con los datos completos. «Editar» muestra un aviso de
-  que la edición llega en el PR 7.
+  un panel de solo lectura con los datos completos. «Editar» abre el formulario;
+  «Eliminar» solo se muestra si la cita está cancelada y, en el resto, el panel
+  explica que primero hay que cambiar su estado a «Cancelada».
+- **Crear y editar:** «Nueva cita» y «Editar» abren `CitaFormModal` sobre la
+  misma base. El paciente se busca con el combobox reutilizable (sin opción
+  «Todos»), el profesional y el servicio salen del catálogo y muestran
+  especialidad, duración y precio. El estado solo aparece al editar; las
+  observaciones son opcionales y el resumen muestra el rango inicio–fin antes de
+  guardar.
+- **Disponibilidad:** `src/services/disponibilidad.js` consulta
+  `GET /api/disponibilidad` con fecha, profesional y servicio; al cambiar
+  cualquiera de ellos se recargan las franjas y se limpia la hora elegida. Sin
+  cupos se muestra el motivo y «Ver día siguiente», también para días cerrados.
+  Al editar, si la hora original ya no viene en `franjas` pero sigue cabiendo en
+  el `horario`, se vuelve a ofrecer; las citas históricas conservan la hora
+  registrada sin consultar disponibilidad.
+- **Errores del formulario:** un `409` conserva el modal y los valores, marca la
+  hora y muestra el rango ocupado del backend; un `400` marca los campos, un
+  `404` avisa de una referencia inexistente y un `401` lo maneja el cliente API.
+  El botón de guardar se deshabilita con una guardia `guardando` para evitar
+  dobles envíos y el foco salta al primer campo con error.
+- **Eliminar:** confirmación con paciente, fecha y horario; el motivo de un `409`
+  del backend se muestra dentro del diálogo. Tras guardar o eliminar se
+  refresca el listado conservando vista y filtros de la URL y se muestra un
+  toast.
 - **Estados:** carga, vacío («no hay citas para esta fecha», «sin citas con
   estos filtros» o «no hay citas registradas»), error de red con reintento y sin
   datos de otra fecha. Cuando hay un paciente filtrado sin citas ese día, el
   vacío ofrece «Ver todas las fechas».
 
 La lógica de fechas, agrupación, estados, rangos y resumen vive en
-`src/lib/agenda.js`; los componentes están en `src/components/agenda/`.
+`src/lib/agenda.js`; la de validación, payload, errores y horario del formulario
+en `src/lib/citas.js`. Los componentes están en `src/components/agenda/` y los
+servicios de catálogo y disponibilidad en `src/services/servicios.js`,
+`src/services/profesionales.js` y `src/services/disponibilidad.js`.
+
+## Calidad
+
+No hay runner de pruebas unitarias en el frontend. Cada cambio se valida con:
+
+```bash
+npm run lint
+npm run build
+```
+
+La agenda se verifica manualmente con backend y MySQL en marcha: crear y editar
+con y sin cruce de horario, día cerrado o sin cupos, eliminar una cita cancelada,
+intento de eliminar una programada (`409`), doble submit y expiración de sesión
+(`401`). Las reglas de negocio de citas y disponibilidad se cubren con
+`npm test` en [`../backend/`](../README.md#pruebas).
 
 ## Accesibilidad y responsive
 

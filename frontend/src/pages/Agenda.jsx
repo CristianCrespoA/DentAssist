@@ -7,6 +7,7 @@ import {
   CalendarX2,
   ChevronLeft,
   ChevronRight,
+  Plus,
   RefreshCw,
   SearchX,
   X,
@@ -27,14 +28,16 @@ import {
   sumarDias,
 } from '../lib/agenda';
 import { nombreCompleto } from '../lib/pacientes';
-import { listarCitas } from '../services/citas';
+import { listarCitas, eliminarCita } from '../services/citas';
 import { obtenerPaciente } from '../services/pacientes';
 import { listarProfesionales } from '../services/profesionales';
 import PacienteFiltro from '../components/agenda/PacienteFiltro';
 import AgendaDetalleModal from '../components/agenda/AgendaDetalleModal';
+import CitaFormModal from '../components/agenda/CitaFormModal';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/Card';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 import EmptyState from '../components/ui/EmptyState';
 import Input from '../components/ui/Input';
 import PageHeader from '../components/ui/PageHeader';
@@ -68,7 +71,7 @@ const construirParametros = ({
 
 function Agenda() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { info } = useToast();
+  const { exito, error: toastError } = useToast();
 
   const hoy = hoyBogotaISO();
   const fechaParam = searchParams.get('fecha');
@@ -94,6 +97,13 @@ function Agenda() {
   const [errorProfesionales, setErrorProfesionales] = useState('');
 
   const [detalleId, setDetalleId] = useState(null);
+  const [formularioAbierto, setFormularioAbierto] = useState(false);
+  const [citaEnEdicion, setCitaEnEdicion] = useState(null);
+  const [citaAEliminar, setCitaAEliminar] = useState(null);
+  const [eliminando, setEliminando] = useState(false);
+  const [errorEliminar, setErrorEliminar] = useState('');
+  // Guardia síncrona contra dobles clics en la confirmación de eliminación.
+  const eliminandoRef = useRef(false);
 
   const hayDatos = useRef(false);
 
@@ -286,6 +296,7 @@ function Agenda() {
   const hayFiltros = Boolean(pacienteId || profesionalId || estado);
   const fechaLarga = formatearFechaLarga(fecha);
   const citaDetalle = citas.find((cita) => cita.id === detalleId) || null;
+  const rangoEliminar = citaAEliminar ? rangoHorario(citaAEliminar) : null;
 
   const consultaActual =
     consultaPaciente.id === pacienteId ? consultaPaciente : null;
@@ -305,11 +316,78 @@ function Agenda() {
   const abrirDetalle = (cita) => setDetalleId(cita.id);
   const cerrarDetalle = () => setDetalleId(null);
 
-  const editarCita = () => {
+  const abrirNuevaCita = () => {
+    setCitaEnEdicion(null);
+    setFormularioAbierto(true);
+  };
+
+  const abrirEdicion = (cita) => {
     setDetalleId(null);
-    info('La edición de citas estará disponible en el PR 7.', {
-      titulo: 'Edición de citas',
-    });
+    setCitaEnEdicion(cita);
+    setFormularioAbierto(true);
+  };
+
+  const cerrarFormulario = () => {
+    setFormularioAbierto(false);
+    setCitaEnEdicion(null);
+  };
+
+  const manejarGuardado = (citaGuardada, esEdicion) => {
+    cerrarFormulario();
+    setVersion((actual) => actual + 1);
+
+    const nombre = nombreCompleto(citaGuardada?.paciente);
+
+    exito(
+      esEdicion
+        ? 'Los cambios se guardaron correctamente.'
+        : `${nombre || 'La cita'} se registró en la agenda.`,
+      { titulo: esEdicion ? 'Cita actualizada' : 'Cita creada' },
+    );
+  };
+
+  const abrirEliminar = (cita) => {
+    setDetalleId(null);
+    setErrorEliminar('');
+    setCitaAEliminar(cita);
+  };
+
+  const cerrarEliminar = () => {
+    if (eliminandoRef.current) return;
+    setCitaAEliminar(null);
+    setErrorEliminar('');
+  };
+
+  const confirmarEliminar = async () => {
+    if (!citaAEliminar || eliminandoRef.current) return;
+
+    eliminandoRef.current = true;
+    setEliminando(true);
+    setErrorEliminar('');
+
+    try {
+      await eliminarCita(citaAEliminar.id);
+
+      const nombre = nombreCompleto(citaAEliminar.paciente);
+      setCitaAEliminar(null);
+      setVersion((actual) => actual + 1);
+
+      exito(`${nombre || 'La cita'} se eliminó correctamente.`, {
+        titulo: 'Cita eliminada',
+      });
+    } catch (error) {
+      if (error?.name === 'AbortError' || error?.status === 401) return;
+
+      const mensaje = error?.mensaje || 'No se pudo eliminar la cita.';
+      setErrorEliminar(mensaje);
+
+      if (error?.status !== 409) {
+        toastError(mensaje, { titulo: 'No se pudo eliminar' });
+      }
+    } finally {
+      eliminandoRef.current = false;
+      setEliminando(false);
+    }
   };
 
   const etiquetaFila = (cita) => {
@@ -478,6 +556,11 @@ function Agenda() {
       <PageHeader
         title="Agenda"
         description="Consulta las citas por día o en todas las fechas, y filtra por paciente, profesional o estado."
+        actions={
+          <Button onClick={abrirNuevaCita} leftIcon={<Plus aria-hidden="true" />}>
+            Nueva cita
+          </Button>
+        }
       />
 
       <div className="space-y-4">
@@ -798,8 +881,82 @@ function Agenda() {
         <AgendaDetalleModal
           cita={citaDetalle}
           onClose={cerrarDetalle}
-          onEditar={editarCita}
+          onEditar={abrirEdicion}
+          onEliminar={abrirEliminar}
         />
+      ) : null}
+
+      {formularioAbierto ? (
+        <CitaFormModal
+          cita={citaEnEdicion}
+          fechaInicial={todas ? hoy : fecha}
+          pacienteInicial={pacienteFiltro}
+          profesionalInicialId={profesionalId}
+          onClose={cerrarFormulario}
+          onSaved={manejarGuardado}
+        />
+      ) : null}
+
+      {citaAEliminar ? (
+        <ConfirmDialog
+          open
+          onClose={cerrarEliminar}
+          onConfirm={confirmarEliminar}
+          title="Eliminar cita"
+          description="Esta acción no se puede deshacer."
+          confirmLabel="Eliminar cita"
+          isLoading={eliminando}
+        >
+          <div className="space-y-3">
+            <p className="text-sm text-neutral-700">
+              ¿Seguro que quieres eliminar la cita de{' '}
+              <strong className="font-semibold text-neutral-900">
+                {nombreCompleto(citaAEliminar.paciente) || 'este paciente'}
+              </strong>
+              ?
+            </p>
+
+            <dl className="grid gap-2 rounded-field border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-sm sm:grid-cols-2">
+              <div className="min-w-0">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                  Paciente
+                </dt>
+                <dd className="mt-0.5 break-words text-neutral-900">
+                  {nombreCompleto(citaAEliminar.paciente) || '—'}
+                </dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                  Fecha
+                </dt>
+                <dd className="mt-0.5 text-neutral-900">
+                  {formatearFechaLarga(citaAEliminar.fecha)}
+                </dd>
+              </div>
+              <div className="min-w-0 sm:col-span-2">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                  Horario
+                </dt>
+                <dd className="mt-0.5 font-semibold tabular-nums text-neutral-900">
+                  {rangoEliminar?.inicio || '—'} – {rangoEliminar?.fin || '—'}
+                </dd>
+              </div>
+            </dl>
+
+            {errorEliminar ? (
+              <div
+                role="alert"
+                className="flex items-start gap-2 rounded-field border border-danger-200 bg-danger-50 px-3 py-2.5 text-sm text-danger-800"
+              >
+                <AlertTriangle
+                  className="mt-0.5 size-4 shrink-0 text-danger-600"
+                  aria-hidden="true"
+                />
+                <p>{errorEliminar}</p>
+              </div>
+            ) : null}
+          </div>
+        </ConfirmDialog>
       ) : null}
     </section>
   );

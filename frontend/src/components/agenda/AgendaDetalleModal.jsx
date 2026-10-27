@@ -1,4 +1,4 @@
-import { Pencil } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 import { cn } from '../../lib/cn';
 import {
   META_ESTADO,
@@ -25,14 +25,15 @@ function Dato({ etiqueta, valor, className }) {
   );
 }
 
-/** Detalle de solo lectura de una cita. La edición llega en el PR 7. */
-function AgendaDetalleModal({ cita, onClose, onEditar }) {
+/** Detalle de solo lectura de una cita con accesos a editar y eliminar. */
+function AgendaDetalleModal({ cita, onClose, onEditar, onEliminar }) {
   const estado = META_ESTADO[cita?.estado] || META_ESTADO.programada;
   const { inicio, fin, duracionMinutos } = rangoHorario(cita);
   const paciente = cita?.paciente;
   const telefono = formatearTelefono(paciente?.telefono);
   const enlaceTelefono = hrefTelefono(paciente?.telefono);
   const profesional = cita?.profesional;
+  const esCancelada = cita?.estado === 'cancelada';
 
   return (
     <Modal
@@ -46,6 +47,15 @@ function AgendaDetalleModal({ cita, onClose, onEditar }) {
           <Button variant="secondary" onClick={onClose}>
             Cerrar
           </Button>
+          {esCancelada ? (
+            <Button
+              variant="danger"
+              onClick={() => onEliminar(cita)}
+              leftIcon={<Trash2 aria-hidden="true" />}
+            >
+              Eliminar
+            </Button>
+          ) : null}
           <Button
             onClick={() => onEditar(cita)}
             leftIcon={<Pencil aria-hidden="true" />}
@@ -129,6 +139,13 @@ function AgendaDetalleModal({ cita, onClose, onEditar }) {
             className="sm:col-span-2"
           />
         </dl>
+
+        {!esCancelada ? (
+          <p className="border-t border-neutral-200 pt-4 text-xs text-neutral-500">
+            Para eliminar esta cita primero debes editarla y cambiar su estado a
+            «Cancelada».
+          </p>
+        ) : null}
       </div>
     </Modal>
   );

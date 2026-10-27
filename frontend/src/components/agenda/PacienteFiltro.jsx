@@ -20,6 +20,10 @@ function PacienteFiltro({
   etiqueta = '',
   onSelect,
   onClear,
+  permitirTodos = true,
+  placeholder,
+  invalid = false,
+  'aria-describedby': ariaDescribedBy,
 }) {
   const [abierto, setAbierto] = useState(false);
   const [busqueda, setBusqueda] = useState('');
@@ -37,10 +41,15 @@ function PacienteFiltro({
   const haySeleccion = Boolean(pacienteId);
 
   const textoBoton =
-    etiqueta || (haySeleccion ? 'Paciente seleccionado' : 'Todos los pacientes');
+    etiqueta ||
+    (haySeleccion
+      ? 'Paciente seleccionado'
+      : placeholder || (permitirTodos ? 'Todos los pacientes' : 'Seleccionar paciente'));
 
   const opciones = [
-    { clave: OPCION_TODOS, etiqueta: 'Todos los pacientes', paciente: null },
+    ...(permitirTodos
+      ? [{ clave: OPCION_TODOS, etiqueta: 'Todos los pacientes', paciente: null }]
+      : []),
     ...resultados.map((paciente) => ({
       clave: String(paciente.id),
       etiqueta: nombreCompleto(paciente),
@@ -187,9 +196,14 @@ function PacienteFiltro({
         aria-expanded={abierto}
         aria-controls={abierto ? idLista : undefined}
         aria-label={`Paciente: ${textoBoton}`}
+        aria-invalid={invalid || undefined}
+        aria-describedby={ariaDescribedBy}
         className={cn(
-          'flex h-10 w-full items-center gap-2 rounded-field border border-neutral-400 bg-white px-3 text-left text-sm shadow-xs transition-colors',
+          'flex h-10 w-full items-center gap-2 rounded-field border bg-white px-3 text-left text-sm shadow-xs transition-colors',
           'focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-600/40',
+          invalid
+            ? 'border-danger-400 focus:border-danger-600 focus:ring-danger-500/40'
+            : 'border-neutral-400',
           abierto && 'border-primary-600 ring-2 ring-primary-600/40',
         )}
       >
@@ -268,10 +282,18 @@ function PacienteFiltro({
                   </li>
                 ) : null}
 
+                {!cargando && resultados.length === 0 && !busqueda.trim() ? (
+                  <li className="px-3 py-3 text-sm text-neutral-600">
+                    {permitirTodos
+                      ? 'No hay pacientes registrados.'
+                      : 'Escribe para buscar un paciente.'}
+                  </li>
+                ) : null}
+
                 {opciones.map((opcion, indice) => {
                   const seleccionado =
                     opcion.paciente === null
-                      ? !haySeleccion
+                      ? !haySeleccion && permitirTodos
                       : opcion.clave === String(Number(pacienteId));
 
                   return (

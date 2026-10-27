@@ -8,7 +8,8 @@ Los pacientes gestionan sus citas y solicitudes por WhatsApp.
 
 La aplicación web vive en [`frontend/`](frontend/README.md) (React + Vite + Tailwind CSS). Incluye el
 sistema de diseño, el app shell responsive, las rutas protegidas, el cliente API compartido, el
-CRUD de pacientes y la agenda por día y por todas las fechas.
+CRUD de pacientes, la agenda por día y por todas las fechas, y el formulario de crear/editar citas
+con disponibilidad en vivo.
 
 Todas las rutas requieren el header `Authorization: Bearer <token>`.
 
@@ -57,6 +58,10 @@ El listado se devuelve ordenado por fecha y hora ascendente, con paciente, profe
 - **No se permiten cruces de horario**: ni el profesional ni el paciente pueden tener dos citas solapadas el mismo día.
 - Las citas en estado `cancelada` o `no_asistio` no ocupan horario.
 - Citas contiguas (por ejemplo 10:00–10:30 y 10:30) no se consideran cruce.
+- **Solo se pueden eliminar citas canceladas.** `DELETE /api/citas/:id` responde `409` con el mensaje
+  `Solo se pueden eliminar citas canceladas` para cualquier otro estado, de modo que el historial de
+  una cita activa no se borre por accidente. Para eliminarla primero se cambia su estado a
+  `cancelada` mediante `PUT /api/citas/:id`.
 
 ### Códigos de respuesta
 
@@ -68,7 +73,7 @@ El listado se devuelve ordenado por fecha y hora ascendente, con paciente, profe
 | `401` | Token ausente o inválido |
 | `403` | El usuario no es personal de la clínica |
 | `404` | La cita o una referencia (paciente, profesional, servicio) no existe |
-| `409` | Cruce de horario |
+| `409` | Cruce de horario, o intento de eliminar una cita que no está cancelada |
 
 ### Interfaz web de agenda
 
@@ -81,7 +86,11 @@ La ruta `/agenda` del frontend opera el listado de citas:
 - **Sin N+1:** cada cambio de vista, fecha o filtro hace una única petición a `/api/citas` (sin `fecha` en la vista combinada). El catálogo de profesionales se carga una vez y el paciente del filtro se resuelve con `GET /api/pacientes/:id`.
 - **Listado:** ordenado por fecha y hora, con inicio y fin calculados a partir de `servicio.duracionMinutos` (30 por defecto), paciente, profesional, servicio, estado como badge y observaciones abreviadas.
 - **Resumen:** total de citas, rango horario del día o cantidad de días con citas, y conteo por estado.
-- **Detalle:** clic o `Enter` sobre una fila abre un panel de solo lectura con los datos completos. El botón «Editar» se habilita en el PR 7.
+- **Detalle:** clic o `Enter` sobre una fila abre un panel de solo lectura con los datos completos. «Editar» abre el formulario y «Eliminar» solo aparece en citas canceladas; en el resto se explica que primero hay que cancelarlas.
+- **Crear y editar:** el botón «Nueva cita» y la acción «Editar» abren el mismo modal. El paciente se elige con búsqueda remota, el profesional y el servicio salen del catálogo (con duración y precio), y el estado solo se muestra al editar. El resumen muestra fecha y el rango inicio–fin antes de guardar.
+- **Disponibilidad:** fecha, hora, profesional y servicio se eligen con `GET /api/disponibilidad`; al cambiar fecha, profesional o servicio se recargan las franjas. Sin cupos se muestra el motivo y «Ver día siguiente»; un día cerrado o sin cupos también ofrece esa salida. Al editar se vuelve a ofrecer la hora actual si sigue cabiendo en el horario, y las citas históricas conservan la hora registrada sin consultar disponibilidad.
+- **Errores del formulario:** un `409` mantiene el modal abierto con el rango ocupado (`El profesional ya tiene una cita…`) y conserva los valores; un `400` marca los campos, un `404` avisa de una referencia inexistente y un `401` cierra sesión a través del cliente API. El botón de guardar se bloquea mientras hay una petición en curso para evitar dobles envíos.
+- **Eliminar:** solo disponible para citas canceladas, tras confirmar paciente, fecha y horario. Si el backend rechaza la operación (`409`), el motivo se muestra dentro del diálogo. Tras guardar o eliminar se refresca la agenda conservando la vista y los filtros de la URL, y se muestra un toast.
 - **Estados:** carga, vacío («no hay citas para esta fecha», «sin citas con estos filtros» o «no hay citas registradas»), error con reintento y tabla en escritorio con tarjetas en móvil. Si un paciente filtrado no tiene citas ese día, el vacío ofrece «Ver todas las fechas».
 
 ## API de pacientes
@@ -264,4 +273,4 @@ Desde `backend/`:
 npm test
 ```
 
-La suite usa el runner integrado de Node y cubre la conversión de horas, el cálculo del día de la semana, la generación de bloques para servicios de 30, 45 y 60 minutos, el receso de almuerzo, el cierre, los bloqueos por citas, los cupos ya transcurridos del día y la validación de horario de las citas.
+La suite usa el runner integrado de Node y cubre la conversión de horas, el cálculo del día de la semana, la generación de bloques para servicios de 30, 45 y 60 minutos, el receso de almuerzo, el cierre, los bloqueos por citas, los cupos ya transcurridos del día y la validación de horario de las citas. Las pruebas de citas cubren crear y editar con y sin cruce, el día cerrado, la agenda llena, eliminar una cita cancelada, el rechazo `409` al eliminar una cita programada y el `404` de una cita inexistente.
