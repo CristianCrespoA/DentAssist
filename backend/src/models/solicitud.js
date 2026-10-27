@@ -7,15 +7,27 @@ module.exports = (sequelize, DataTypes) => {
     static associate(models) {
       Solicitud.belongsTo(models.Paciente, { foreignKey: 'pacienteId', as: 'paciente' });
       Solicitud.belongsTo(models.Servicio, { foreignKey: 'servicioId', as: 'servicio' });
-      Solicitud.hasOne(models.Cita, { foreignKey: 'solicitudId', as: 'cita' });
+      // Cita que se atiende o reprograma desde esta solicitud.
+      Solicitud.belongsTo(models.Cita, { foreignKey: 'citaId', as: 'cita' });
+      // Vínculo histórico inverso: cita que pudo haberse creado a partir de la solicitud.
+      Solicitud.hasOne(models.Cita, { foreignKey: 'solicitudId', as: 'citaGenerada' });
+      Solicitud.hasMany(models.SolicitudHistorial, {
+        foreignKey: 'solicitudId',
+        as: 'historial'
+      });
     }
   }
   Solicitud.init({
     pacienteId: DataTypes.INTEGER,
     servicioId: DataTypes.INTEGER,
+    citaId: DataTypes.INTEGER,
     mensaje: DataTypes.TEXT,
-    estado: DataTypes.ENUM('pendiente', 'aprobada', 'rechazada'),
-    fechaSolicitud: DataTypes.DATE
+    tipo: DataTypes.ENUM('cancelacion', 'reprogramacion', 'consulta', 'otra'),
+    estado: DataTypes.ENUM('pendiente', 'en_atencion', 'resuelta'),
+    origen: DataTypes.ENUM('whatsapp', 'web', 'manual'),
+    fechaSolicitud: DataTypes.DATE,
+    fechaPropuesta: DataTypes.DATEONLY,
+    horaPropuesta: DataTypes.TIME
   }, {
     sequelize,
     modelName: 'Solicitud',

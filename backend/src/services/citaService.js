@@ -98,7 +98,15 @@ const asegurarReferencias = async ({ pacienteId, profesionalId, servicioId, soli
   return servicio;
 };
 
-const buscarCruce = async ({ pacienteId, profesionalId, fecha, hora, duracionMinutos, excluirId }) => {
+const buscarCruce = async ({
+  pacienteId,
+  profesionalId,
+  fecha,
+  hora,
+  duracionMinutos,
+  excluirId,
+  transaction
+}) => {
   const citas = await db.Cita.findAll({
     where: {
       fecha,
@@ -106,7 +114,8 @@ const buscarCruce = async ({ pacienteId, profesionalId, fecha, hora, duracionMin
       [Op.or]: [{ profesionalId }, { pacienteId }],
       ...(excluirId ? { id: { [Op.ne]: excluirId } } : {})
     },
-    include: [{ model: db.Servicio, as: 'servicio', attributes: ['id', 'duracionMinutos'] }]
+    include: [{ model: db.Servicio, as: 'servicio', attributes: ['id', 'duracionMinutos'] }],
+    transaction
   });
 
   const inicioNuevo = aMinutos(hora);
@@ -277,6 +286,7 @@ const eliminarCita = async (id) => {
 
 module.exports = {
   ESTADOS,
+  buscarCruce,
   crearCita,
   listarCitas,
   actualizarCita,

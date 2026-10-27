@@ -93,6 +93,92 @@ La ruta `/agenda` del frontend opera el listado de citas:
 - **Eliminar:** solo disponible para citas canceladas, tras confirmar paciente, fecha y horario. Si el backend rechaza la operación (`409`), el motivo se muestra dentro del diálogo. Tras guardar o eliminar se refresca la agenda conservando la vista y los filtros de la URL, y se muestra un toast.
 - **Estados:** carga, vacío («no hay citas para esta fecha», «sin citas con estos filtros» o «no hay citas registradas»), error con reintento y tabla en escritorio con tarjetas en móvil. Si un paciente filtrado no tiene citas ese día, el vacío ofrece «Ver todas las fechas».
 
+## API de solicitudes
+
+Todas las rutas requieren el header `Authorization: Bearer <token>` y están disponibles solo para `admin` y `recepcionista`. Las solicitudes no se eliminan: se conservan para trazabilidad junto con su historial inmutable.
+
+| Método | Ruta | Descripción |
+| --- | --- | --- |
+| `GET` | `/api/solicitudes` | Listar solicitudes con filtros y paginación |
+| `GET` | `/api/solicitudes/:id` | Obtener el detalle con paciente, cita e historial |
+| `PUT` | `/api/solicitudes/:id/estado` | Cambiar el estado y registrar el historial |
+
+### Estados y transiciones
+
+| Estado | Significado |
+| --- | --- |
+| `pendiente` | Recibida y aún sin atender |
+| `en_atencion` | El personal la está gestionando |
+| `resuelta` | Cerrada; ya no admite más cambios |
+
+Las únicas transiciones válidas son:
+
+- `pendiente` → `en_atencion`
+- `pendiente` → `resuelta`
+- `en_atencion` → `resuelta`
+
+Cualquier otra transición, un estado desconocido o intentar resolver dos veces responde `409`. Resolver una solicitud exige `comentario`; si falta, la API responde `400`. Cada transición exitosa crea una fila en `SolicitudHistorials` con fecha/hora (`createdAt`), estado anterior, estado nuevo, usuario autenticado y comentario.
+
+### Listado y filtros
+
+| Query | Formato | Ejemplo |
+| --- | --- | --- |
+| `estado` | `pendiente`, `en_atencion`, `resuelta` | `/api/solicitudes?estado=pendiente` |
+| `tipo` | `cancelacion`, `reprogramacion`, `consulta`, `otra` | `/api/solicitudes?tipo=reprogramacion` |
+| `pacienteId` | entero positivo | `/api/solicitudes?pacienteId=1` |
+| `fecha` | `YYYY-MM-DD` (día de `fechaSolicitud`) | `/api/solicitudes?fecha=2026-11-10` |
+| `pagina` | entero positivo, por defecto `1` | `/api/solicitudes?pagina=2` |
+| `limite` | entero entre `1` y `100`, por defecto `20` | `/api/solicitudes?limite=50` |
+
+El resultado se ordena por `fechaSolicitud` descendente y luego por `id` descendente:
+
+```json
+{
+  "datos": [],
+  "total": 0,
+  "pagina": 1,
+  "limite": 20
+}
+```
+
+### Detalle
+
+`GET /api/solicitudes/:id` devuelve la solicitud con `paciente`, `servicio`, `cita` (incluido el profesional) e `historial` ordenado de forma ascendente por `createdAt`. Cada fila del historial incluye el `usuario` que hizo el cambio.
+
+### Cambiar estado
+
+```json
+{
+  "estado": "resuelta",
+  "comentario": "El paciente confirmó la cancelación"
+}
+```
+
+Al resolver, la operación se ejecuta en una transacción y aplica el efecto correspondiente al `tipo`:
+
+- `cancelacion`: la cita vinculada (`citaId`) pasa a `cancelada`, por lo que su horario queda libre.
+- `reprogramacion`: se validan la fecha/hora propuestas contra el horario de atención y la misma lógica de cruces de citas. Si la franja está ocupada, no se modifica ni la cita ni la solicitud y la API responde `409` con `alternativas` (horas disponibles en la fecha propuesta). Si está libre, la cita actualiza `fecha` y `hora`.
+- `consulta` y `otra`: no modifican citas.
+
+Si la solicitud de reprogramación no tiene `fechaPropuesta`/`horaPropuesta` o no tiene una cita asociada, responde `400`/`409` según el caso.
+
+### Códigos de respuesta
+
+| Código | Significado |
+| --- | --- |
+| `200` | Listado, detalle o transición exitosa |
+| `400` | Filtros o datos inválidos, o falta el comentario al resolver |
+| `401` | Token ausente o inválido |
+| `403` | Usuario sin rol de personal |
+| `404` | La solicitud o una referencia asociada no existe |
+| `409` | Transición inválida, resolución repetida, conflicto de horario o falta de cita para reprogramar |
+
+### Migración de datos
+
+La migración `20241025000009-solicitudes-estados-historial.js` amplía temporalmente el ENUM de MySQL, convierte `aprobada` y `rechazada` en `resuelta`, crea una fila de historial por cada fila migrada (con comentario y sin usuario, porque no hay actor original) y deja el ENUM final con `pendiente`, `en_atencion` y `resuelta`. También agrega `tipo` (por defecto `otra`), `citaId`, `fechaPropuesta`, `horaPropuesta` y `origen` (por defecto `whatsapp`), y enlaza las citas existentes que ya apuntaban a una solicitud. El ENUM del historial conserva `aprobada` y `rechazada` para no perder el estado original.
+
+El `down` es explícito: recupera el estado original desde la primera fila de historial cuando existe, usa `pendiente` para `en_atencion` y `aprobada` como equivalencia para una `resuelta` sin historial, y después elimina las columnas nuevas y la tabla de historial.
+
 ## API de pacientes
 
 Todas las rutas requieren el header `Authorization: Bearer <token>` y están disponibles solo para `admin` y `recepcionista`.
@@ -273,4 +359,4 @@ Desde `backend/`:
 npm test
 ```
 
-La suite usa el runner integrado de Node y cubre la conversión de horas, el cálculo del día de la semana, la generación de bloques para servicios de 30, 45 y 60 minutos, el receso de almuerzo, el cierre, los bloqueos por citas, los cupos ya transcurridos del día y la validación de horario de las citas. Las pruebas de citas cubren crear y editar con y sin cruce, el día cerrado, la agenda llena, eliminar una cita cancelada, el rechazo `409` al eliminar una cita programada y el `404` de una cita inexistente.
+La suite usa el runner integrado de Node y cubre la conversión de horas, el cálculo del día de la semana, la generación de bloques para servicios de 30, 45 y 60 minutos, el receso de almuerzo, el cierre, los bloqueos por citas, los cupos ya transcurridos del día y la validación de horario de las citas. Las pruebas de citas cubren crear y editar con y sin cruce, el día cerrado, la agenda llena, eliminar una cita cancelada, el rechazo `409` al eliminar una cita programada y el `404` de una cita inexistente. Las pruebas de solicitudes cubren las transiciones permitidas y prohibidas, el comentario obligatorio, el historial con usuario, los efectos de cancelación y reprogramación, el rollback ante un cruce con alternativas, los filtros y la paginación, los permisos de staff y la migración con datos previos y su `down`.

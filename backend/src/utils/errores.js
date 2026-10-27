@@ -6,7 +6,13 @@ const errorNegocio = (mensaje, statusCode = 400) => {
 
 const manejarError = (res, error) => {
   if (error.statusCode) {
-    return res.status(error.statusCode).json({ mensaje: error.message });
+    const cuerpo = { mensaje: error.message };
+
+    if (Array.isArray(error.alternativas)) {
+      cuerpo.alternativas = error.alternativas;
+    }
+
+    return res.status(error.statusCode).json(cuerpo);
   }
 
   if (error.name === 'SequelizeUniqueConstraintError') {

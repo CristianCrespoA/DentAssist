@@ -6,6 +6,7 @@ const disponibilidadRoutes = require('./disponibilidadRoutes');
 const pacienteRoutes = require('./pacienteRoutes');
 const profesionalRoutes = require('./profesionalRoutes');
 const servicioRoutes = require('./servicioRoutes');
+const solicitudRoutes = require('./solicitudRoutes');
 
 router.get('/', (req, res) => {
   res.json({ message: 'API routes' });
@@ -17,5 +18,6 @@ router.use('/citas', citaRoutes);
 router.use('/disponibilidad', disponibilidadRoutes);
 router.use('/profesionales', profesionalRoutes);
 router.use('/servicios', servicioRoutes);
+router.use('/solicitudes', solicitudRoutes);
 
 module.exports = router;
