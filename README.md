@@ -7,7 +7,8 @@ La plataforma web es de uso exclusivo del **personal de la clínica** (`admin` o
 Los pacientes gestionan sus citas y solicitudes por WhatsApp.
 
 La aplicación web vive en [`frontend/`](frontend/README.md) (React + Vite + Tailwind CSS). Incluye el
-sistema de diseño, el app shell responsive, las rutas protegidas y el cliente API compartido.
+sistema de diseño, el app shell responsive, las rutas protegidas, el cliente API compartido y el
+CRUD de pacientes.
 
 Todas las rutas requieren el header `Authorization: Bearer <token>`.
 
@@ -132,6 +133,16 @@ La búsqueda cubre nombre, apellido, correo y teléfono. La respuesta tiene la f
 ### Eliminación
 
 Un paciente solo se puede eliminar si no tiene citas ni solicitudes registradas. En caso contrario la API responde `409` e indica qué historial debe cerrarse primero; esto evita que las llaves foráneas en `CASCADE` borren el historial clínico.
+
+### Interfaz web de pacientes
+
+La ruta `/pacientes` del frontend opera esta API:
+
+- Listado paginado (20 por página) con búsqueda por nombre, apellido, correo o teléfono y debounce de 300 ms.
+- Alta y edición en un modal con validación en cliente equivalente a la del backend; los errores del servidor se muestran junto al campo y un `409` mantiene el formulario abierto.
+- Detalle con todos los datos y acceso directo a la agenda del paciente mediante `/agenda?pacienteId=ID` (el filtro de agenda llega en el PR 6).
+- Eliminación con confirmación; si el paciente tiene citas o solicitudes, el `409` se explica dentro del diálogo.
+- Estados de carga, vacío, error de red con reintento, `401`/`403` y toasts de éxito o fallo.
 
 ## API de catálogo: profesionales y servicios
 

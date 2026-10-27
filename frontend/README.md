@@ -60,7 +60,7 @@ No se usan estilos inline. Las clases condicionales se combinan con `cn` desde
 | Componente | Uso |
 | --- | --- |
 | `Button` | Variantes `primary`, `secondary`, `ghost`, `danger`, `success`, `link`; tamaños y estado de carga |
-| `Input`, `Select`, `Textarea` | Controles con estados de error y foco visibles |
+| `Input`, `Select`, `Textarea` | Controles con estados de error y foco visibles; `Input` admite adornos al inicio y al final |
 | `Field` | Etiqueta, ayuda y error asociados con `id`, `aria-invalid` y `aria-describedby` |
 | `Card` | Contenedor con `CardHeader`, `CardTitle`, `CardDescription`, `CardContent` y `CardFooter` |
 | `Table` | Tabla en escritorio y tarjetas apiladas en móvil |
@@ -75,8 +75,9 @@ No se usan estilos inline. Las clases condicionales se combinan con `cn` desde
 ## App shell y rutas
 
 - `/` redirige a `/agenda`.
-- `/agenda`, `/pacientes` y `/solicitudes` son rutas protegidas. Hasta los PRs 5,
-  6 y 9 muestran una página provisional «en construcción».
+- `/agenda` y `/solicitudes` son rutas protegidas y muestran una página
+  provisional «en construcción» hasta los PRs 6 y 9.
+- `/pacientes` es una ruta protegida con el CRUD completo de pacientes.
 - Cualquier ruta desconocida redirige a `/agenda` (sin 404).
 - `/login` es pública; si ya hay sesión redirige a `/agenda`.
 
@@ -96,6 +97,38 @@ rol, la ruta activa y el cierre de sesión.
   redirige al login con un toast informativo.
 
 La sesión se sincroniza entre pestañas mediante el evento `storage`.
+
+## Pacientes
+
+`/pacientes` opera la API del PR 1 (`src/services/pacientes.js`):
+
+- **Listado y búsqueda:** tabla con nombre, teléfono, correo, fecha de nacimiento
+  y acciones. El buscador aplica un debounce de 300 ms y consulta nombre,
+  apellido, correo y teléfono. La búsqueda vuelve siempre a la página 1.
+- **Paginación:** 20 pacientes por página con «Anterior»/«Siguiente», resumen de
+  resultados y total. La página y la búsqueda se conservan al abrir, guardar o
+  cancelar una edición.
+- **Crear y editar:** modal con todos los campos del modelo. La validación del
+  cliente replica el backend (obligatorios, longitudes, formato de correo,
+  teléfono de 7 a 15 dígitos y fecha no futura) y enfoca el primer campo con
+  error. Los `409` y demás errores del servidor se muestran junto al campo
+  correspondiente y el formulario permanece abierto.
+- **Teléfono:** se muestra con el indicativo `+57`; al editar se oculta el
+  prefijo almacenado y el backend lo vuelve a normalizar al guardar.
+- **Detalle:** modal con todos los datos, enlaces `tel:`/`mailto:` y el botón
+  «Ver agenda», que navega a `/agenda?pacienteId=ID` (el filtro de la agenda se
+  implementa en el PR 6).
+- **Eliminar:** confirmación con foco inicial en «Cancelar». Si la API responde
+  `409` porque el paciente tiene citas o solicitudes, el motivo se explica dentro
+  del diálogo y no se cierra.
+- **Estados:** carga, vacío, sin coincidencias, error de red con reintento y
+  errores `401`/`403`. Las altas, ediciones y eliminaciones exitosas muestran un
+  toast; los fallos también se notifican salvo el `409` de eliminación, que queda
+  inline para no perder el contexto.
+
+La lógica de formato, validación y traducción de mensajes del backend vive en
+`src/lib/pacientes.js`; los componentes de la pantalla están en
+`src/components/pacientes/`.
 
 ## Accesibilidad y responsive
 
