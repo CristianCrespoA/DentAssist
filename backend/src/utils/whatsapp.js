@@ -52,9 +52,20 @@ const RANGO_ESTADO = {
   fallido: 4
 };
 
+// Estados persistidos en Conversacion.estadoFlujo. La conversación sobrevive a
+// reinicios porque el paso actual vive en la base y no en memoria.
 const ESTADOS_FLUJO = {
   INICIAL: 'inicial',
-  AVISO_ENVIADO: 'aviso_enviado'
+  AVISO_ENVIADO: 'aviso_enviado',
+  MENU: 'menu',
+  INFO_SERVICIOS: 'info_servicios',
+  DISPONIBILIDAD: 'disponibilidad',
+  SOLICITAR_SERVICIO: 'solicitar_servicio',
+  SOLICITAR_PROFESIONAL: 'solicitar_profesional',
+  SOLICITAR_FECHA: 'solicitar_fecha',
+  SOLICITAR_HORA: 'solicitar_hora',
+  CONFIRMAR: 'confirmar',
+  HUMANO: 'humano'
 };
 
 const MENSAJE_PRIVACIDAD = [
@@ -71,6 +82,22 @@ const MENSAJE_TIPO_NO_SOPORTADO =
 
 const MOTIVO_VENTANA_CERRADA =
   'Ventana de 24 horas cerrada: se requiere una plantilla aprobada por Meta';
+
+const MENSAJE_DISCULPA =
+  '😕 Tuve un problema para procesar tu mensaje. Ya avisé a recepción para que te ayude. Si quieres volver a intentarlo, escribe *menú*.';
+
+const MENSAJE_HUMANO =
+  '👩‍💼 Listo, dejé tu solicitud para que una persona de recepción te contacte. Si quieres volver al menú, escribe *menú*.';
+
+const parsearContextoJson = (valor) => {
+  if (typeof valor !== 'string') return valor ?? null;
+
+  try {
+    return JSON.parse(valor);
+  } catch (error) {
+    return {};
+  }
+};
 
 const mapearTipoMeta = (tipoMeta) => MAPEO_TIPOS_META[tipoMeta] || 'otro';
 
@@ -95,6 +122,34 @@ const extraerContenido = (mensaje) => {
   }
 };
 
+/**
+ * Identificador de la opción elegida en un botón o lista interactiva. El texto
+ * visible puede repetirse entre pasos, así que la máquina de estados usa el id.
+ */
+const extraerSeleccion = (mensaje) => {
+  if (!mensaje || typeof mensaje !== 'object') return null;
+
+  if (mensaje.type === 'interactive') {
+    const respuesta = mensaje.interactive?.button_reply || mensaje.interactive?.list_reply;
+
+    if (respuesta?.id) {
+      return { id: String(respuesta.id), titulo: respuesta.title ?? null };
+    }
+
+    return null;
+  }
+
+  if (mensaje.type === 'button') {
+    const id = mensaje.button?.payload ?? mensaje.button?.id;
+
+    if (id) {
+      return { id: String(id), titulo: mensaje.button?.text ?? null };
+    }
+  }
+
+  return null;
+};
+
 const fechaDesdeTimestamp = (valor) => {
   const numero = Number(valor);
 
@@ -110,6 +165,8 @@ module.exports = {
   ESTADOS_FLUJO,
   ESTADOS_MENSAJE,
   MAPEO_ESTADOS_META,
+  MENSAJE_DISCULPA,
+  MENSAJE_HUMANO,
   MENSAJE_PRIVACIDAD,
   MENSAJE_TIPO_NO_SOPORTADO,
   MOTIVO_VENTANA_CERRADA,
@@ -117,6 +174,8 @@ module.exports = {
   TIPOS_MENSAJE,
   TIPOS_SOPORTADOS,
   extraerContenido,
+  extraerSeleccion,
   fechaDesdeTimestamp,
-  mapearTipoMeta
+  mapearTipoMeta,
+  parsearContextoJson
 };

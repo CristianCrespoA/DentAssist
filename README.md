@@ -11,9 +11,10 @@ sistema de diseño, el app shell responsive, las rutas protegidas, el cliente AP
 CRUD de pacientes, la agenda por día y por todas las fechas, el formulario de crear/editar citas
 con disponibilidad en vivo y la bandeja de solicitudes por estado con su historial y acciones.
 
-El backend también expone el **canal base de WhatsApp** (webhook de Meta, persistencia de
-conversaciones y mensajes, aviso de privacidad y simulador local). Ver
-[`Canal de WhatsApp`](#canal-de-whatsapp).
+El backend también expone el **canal de WhatsApp** (webhook de Meta, persistencia de
+conversaciones y mensajes, aviso de privacidad, menú interactivo, reserva de citas y simulador
+local). Ver [`Canal de WhatsApp`](#canal-de-whatsapp) y
+[`Ejecución local`](#ejecución-local-y-prueba-en-otra-máquina).
 
 Todas las rutas requieren el header `Authorization: Bearer <token>`.
 
@@ -371,7 +372,7 @@ Reglas de cálculo:
 
 ## Canal de WhatsApp
 
-Integración con la **WhatsApp Cloud API** de Meta para recibir mensajes, persistir la conversación y responder. Este PR implementa la base del canal: webhook, modelos, envío, privacidad y simulador. Los flujos de agendamiento se construyen sobre este canal en PR posteriores.
+Integración con la **WhatsApp Cloud API** de Meta para recibir mensajes, persistir la conversación y responder. Incluye el canal base (webhook, modelos, envío, privacidad y simulador) y el flujo conversacional con menú interactivo y reserva de citas sin intervención humana.
 
 ### Variables de entorno
 
@@ -453,6 +454,38 @@ Content-Type: application/json
 - Un `waMessageId` ya guardado se ignora: no crea conversación, mensaje ni respuesta nueva.
 - Estados `sent`, `delivered`, `read` y `failed` actualizan el mensaje saliente. Los eventos desordenados no hacen retroceder el estado.
 
+#### Flujo conversacional (menú y reserva)
+
+El primer mensaje entrega el aviso de privacidad y, si se envió, el menú. El paso actual se guarda en `Conversacions.estadoFlujo` y los datos parciales en `contexto` (JSON), así que **reiniciar el backend no pierde la conversación**.
+
+El menú usa una lista de 6 filas: Servicios y horarios, Disponibilidad, Solicitar cita, Cancelar cita, Reprogramar y Hablar con una persona. Se respetan los límites de la API: máximo 10 filas por lista y 3 botones por mensaje; la disponibilidad muestra hasta 8 franjas por día.
+
+| Estado | Qué hace |
+| --- | --- |
+| `inicial` / `aviso_enviado` | Espera el primer mensaje y muestra el menú |
+| `menu` | Interpreta la opción elegida |
+| `info_servicios` | Catálogo con duración, precio y horario de atención |
+| `solicitar_servicio` | Elige servicio del catálogo |
+| `solicitar_profesional` | Elige profesional o «Cualquiera disponible» |
+| `solicitar_fecha` | Elige día con botones de los próximos días con cupo o escribe `AAAA-MM-DD` |
+| `solicitar_hora` | Elige una de las hasta 8 franjas ofrecidas |
+| `confirmar` | Muestra el resumen y espera «Sí, agendar» |
+| `disponibilidad` | Consulta cupos sin reservar; al terminar vuelve al menú |
+| `humano` | Recepción toma la conversación; solo `menú` reactiva el asistente |
+
+Reglas del flujo:
+
+- «Cualquiera disponible» combina las franjas de todos los profesionales activos y recuerda cuál atiende cada una.
+- La disponibilidad descarta las citas del propio paciente para no ofrecer un cupo que luego `citaService` rechazaría.
+- La cita se crea con `citaService.crearCita` (mismas validaciones y control de cruces) en estado `programada`.
+- Si la franja se ocupó entre la oferta y la confirmación, `crearCita` responde `409`, no se crea la cita y se ofrecen las franjas restantes o los siguientes días con cupo.
+- Doble confirmación: al agendar, el estado vuelve a `menu` y se guarda la huella del último intento en `contexto.ultimaConfirmacion` durante 5 minutos; un reintento no crea una segunda cita.
+- Opción inválida: repite el paso con «No entendí esa opción» sin perder lo ya elegido.
+- Atajos de texto en cualquier paso: `menú` (también `hola`, `inicio`, `volver`), `cancelar`/`salir` (cancela la reserva en curso) y `persona`/`asesor`/`recepcion` (deriva a recepción).
+- Cancelar y reprogramar del menú derivan a recepción en este PR: así el cupo se libera o se mueve con intervención humana.
+- Si ocurre un error interno, se registra el fallo, la conversación pasa a `humano` y el paciente recibe una disculpa con la opción de volver al menú.
+- Cada salida se persiste en `Mensajes` con su `payload` interactivo. Los textos se recortan a los límites de Meta (cuerpo 1024, título de botón 20, título de fila 24, descripción 72).
+
 #### Simulador local
 
 ```bash
@@ -461,19 +494,49 @@ curl -X POST http://localhost:3000/api/whatsapp/simular \
   -d '{"telefono":"3001234567","texto":"Hola, quiero una cita"}'
 ```
 
-También acepta `{"telefono":"3001234567","boton":"Agendar cita"}`. La respuesta incluye el `conversacionId`, el `mensajeId` y las respuestas generadas:
+También acepta `{"telefono":"3001234567","boton":"Agendar cita"}` y `seleccion`, que simula la pulsación de un botón o fila usando su id:
+
+```bash
+# Abrir el menú (si aún no hay consentimiento, primero envía el aviso)
+curl -X POST http://localhost:3000/api/whatsapp/simular \
+  -H "Content-Type: application/json" \
+  -d '{"telefono":"3001234567","seleccion":"menu:solicitar"}'
+```
+
+Ids que entiende el flujo: `menu:servicios`, `menu:disponibilidad`, `menu:solicitar`, `menu:cancelar`, `menu:reprogramar`, `menu:humano`, `menu:volver`, `serv:<id>`, `prof:<id>`, `prof:cualquiera`, `fecha:AAAA-MM-DD`, `hora:HH:MM`, `hora:otro`, `confirmar:si` y `confirmar:no`.
+
+La respuesta incluye el `conversacionId`, el `mensajeId`, el `estadoFlujo` resultante y las respuestas generadas:
 
 ```json
 {
   "conversacionId": 1,
-  "mensajeId": 1,
+  "mensajeId": 7,
   "duplicado": false,
+  "estadoFlujo": "solicitar_servicio",
   "respuestas": [
     {
-      "id": 2,
+      "id": 8,
       "direccion": "saliente",
-      "tipo": "texto",
-      "contenido": "¡Hola! Soy el asistente de DentAssist...",
+      "tipo": "interactivo",
+      "contenido": "¿Qué servicio te interesa?\n1. Limpieza dental — 30 min · $ 120.000",
+      "payload": {
+        "tipo": "interactivo",
+        "interactivo": {
+          "type": "list",
+          "body": { "text": "¿Qué servicio te interesa?" },
+          "action": {
+            "button": "Ver servicios",
+            "sections": [
+              {
+                "title": "Servicios",
+                "rows": [
+                  { "id": "serv:1", "title": "Limpieza dental", "description": "30 min · $ 120.000" }
+                ]
+              }
+            ]
+          }
+        }
+      },
       "estado": "enviado",
       "requierePlantilla": false,
       "motivo": null
@@ -498,8 +561,8 @@ Muestra cada mensaje con su dirección, estado, `waMessageId`, `motivoFallo` y `
 
 ### Datos y estados
 
-- `Conversacions`: `telefono` único normalizado a dígitos, `pacienteId` opcional, `estadoFlujo`, `contexto` JSON, `ultimaActividad` y `consentimientoAceptadoEn`.
-- `Mensajes`: `conversacionId`, `waMessageId` único, `direccion` (`entrante`/`saliente`), `tipo`, `contenido`, `payload` JSON, `estado`, `ocurridoEn`, `estadoActualizadoEn`, `motivoFallo` y `requierePlantilla`. Tiene índice por conversación y fecha.
+- `Conversacions`: `telefono` único normalizado a dígitos, `pacienteId` opcional, `estadoFlujo`, `contexto` JSON, `ultimaActividad` y `consentimientoAceptadoEn`. El `contexto` guarda la reserva en curso (`servicioId`, `servicioNombre`, `duracionMinutos`, `profesionalId`, `profesionalNombre`, `fecha`, `hora`, `modo`), las opciones vigentes (`opciones`, `franjasOfertadas`, `diasOfrecidos`) y el resultado del último agendamiento (`ultimaCita`, `ultimaConfirmacion`).
+- `Mensajes`: `conversacionId`, `waMessageId` único, `direccion` (`entrante`/`saliente`), `tipo`, `contenido`, `payload` JSON, `estado`, `ocurridoEn`, `estadoActualizadoEn`, `motivoFallo` y `requierePlantilla`. Tiene índice por conversación y fecha. En los salientes interactivos, `contenido` guarda la versión de texto plano y `payload` el objeto enviado a Meta.
 - `Pacientes`: se agrega `origen` (`web`, `whatsapp`, `manual`) y `telefonoNormalizado` único.
 
 | Estado | Significado |
@@ -520,6 +583,125 @@ Muestra cada mensaje con su dirección, estado, `waMessageId`, `motivoFallo` y `
 
 El webhook responde `200` y procesa el evento con `setImmediate` dentro del mismo proceso. Si el proceso se reinicia justo después de responder, el evento ya confirmado a Meta puede perderse. Para producción se recomienda mover el procesamiento a una cola persistente (por ejemplo BullMQ/Redis o una tabla de eventos pendientes) con reintentos e idempotencia.
 
+## Ejecución local y prueba en otra máquina
+
+Todo el proyecto se puede ejecutar **sin servicios en la nube y sin costo**: MySQL/MariaDB local,
+backend y frontend en `localhost`, y el canal de WhatsApp con el **simulador** (no llama a Meta).
+
+### Requisitos
+
+- Node.js 18 o superior (probado con Node 24) y `npm`.
+- MySQL 8 o MariaDB (por ejemplo, el de XAMPP) escuchando en `127.0.0.1:3306`.
+- Git.
+
+### 1. Base de datos
+
+Crea una base vacía con `utf8mb4` (desde phpMyAdmin o la consola de MySQL):
+
+```sql
+CREATE DATABASE nodestore CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+```
+
+### 2. Backend
+
+```powershell
+cd backend
+npm install
+Copy-Item .env.example .env
+```
+
+Edita `backend/.env` con tus datos locales. Para el simulador no hace falta ninguna credencial de
+Meta; deja vacías las variables `WHATSAPP_*`:
+
+```ini
+DB_HOST=127.0.0.1
+DB_USER=root
+DB_PASSWORD=
+DB_NAME=nodestore
+DB_PORT=3306
+PORT=3000
+SLOT_MINUTOS=30
+JWT_SECRET=cambia_esta_clave
+JWT_EXPIRES_IN=1d
+WHATSAPP_SIMULADOR=0
+```
+
+Aplica el esquema y los datos de demostración (solo la primera vez):
+
+```powershell
+npx sequelize-cli db:migrate
+npx sequelize-cli db:seed:all
+```
+
+Levanta el backend:
+
+```powershell
+npm run dev        # recarga automática con nodemon
+# o: npm start     # sin recarga
+```
+
+Debe imprimir `Conectado a MySQL con Sequelize` y `Servidor corriendo en http://localhost:3000`.
+Las migraciones crean las tablas del canal de WhatsApp (`Conversacions` y `Mensajes`); el seed crea
+el usuario `admin@dentassist.com` / `admin123`, profesionales, servicios, horarios y pacientes.
+
+### 3. Frontend
+
+En otra terminal:
+
+```powershell
+cd frontend
+npm install
+Copy-Item .env.example .env
+npm run dev
+```
+
+Abre `http://localhost:5173` e inicia sesión con `admin@dentassist.com` / `admin123`. El frontend
+usa `VITE_API_URL=http://localhost:3000/api`.
+
+### 4. Probar el flujo de WhatsApp sin Meta (gratis)
+
+Con el backend arriba, usa el simulador. Cada llamada es un mensaje entrante y la respuesta incluye
+el `estadoFlujo` y las salidas persistidas:
+
+```powershell
+$base = 'http://localhost:3000/api/whatsapp/simular'
+$tel = '3001234567'
+
+# Primer contacto: aviso de privacidad + menú
+Invoke-RestMethod -Method Post -Uri $base -ContentType 'application/json' `
+  -Body (@{ telefono = $tel; texto = 'Hola' } | ConvertTo-Json)
+
+# Pulsar una opción por su id
+Invoke-RestMethod -Method Post -Uri $base -ContentType 'application/json' `
+  -Body (@{ telefono = $tel; seleccion = 'menu:solicitar' } | ConvertTo-Json)
+```
+
+Repite con los ids que devuelve cada paso (`serv:1`, `prof:cualquiera`, `fecha:2026-10-30`,
+`hora:08:00`, `confirmar:si`). Al confirmar, la cita queda creada en `Citas` con estado
+`programada`. Para verificar la conversación:
+
+```powershell
+cd backend
+npm run whatsapp:verificar -- 573001234567
+```
+
+Puedes detener el backend a mitad del flujo y volver a levantarlo: el paso se conserva en la base y
+la conversación continúa donde iba.
+
+### 5. Probar en otra máquina
+
+1. Clona el repositorio y repite los pasos 1 a 3 (cada máquina usa su propio MySQL local).
+2. Ejecuta la suite desde `backend/`: `npm test` (debe quedar todo en verde).
+3. Usa un teléfono nuevo en el simulador para empezar una conversación desde cero.
+4. Opcional, para probar con WhatsApp real y sin costo: usa el **número de prueba** de Meta y un
+   túnel gratuito (por ejemplo `ngrok http 3000`). Configura el webhook en
+   `https://<tu-tunel>/api/whatsapp/webhook`, suscríbelo a `messages` y escribe desde un número
+   autorizado en la app de Meta. El token de prueba caduca en ~24 h y fuera de la ventana de 24 h
+   solo se pueden enviar plantillas aprobadas.
+
+No se necesita tarjeta ni suscripción: MySQL local y el simulador cubren todo el flujo. La única
+dependencia externa opcional es el sandbox gratuito de Meta para la prueba con WhatsApp real.
+
 ## Pruebas
 
 Desde `backend/`:
@@ -528,4 +710,4 @@ Desde `backend/`:
 npm test
 ```
 
-La suite usa el runner integrado de Node y cubre la conversión de horas, el cálculo del día de la semana, la generación de bloques para servicios de 30, 45 y 60 minutos, el receso de almuerzo, el cierre, los bloqueos por citas, los cupos ya transcurridos del día y la validación de horario de las citas. Las pruebas de citas cubren crear y editar con y sin cruce, el día cerrado, la agenda llena, eliminar una cita cancelada, el rechazo `409` al eliminar una cita programada y el `404` de una cita inexistente. Las pruebas de solicitudes cubren las transiciones permitidas y prohibidas, el comentario obligatorio, el historial con usuario, los efectos de cancelación y reprogramación, el rollback ante un cruce con alternativas, los filtros y la paginación, los permisos de staff y la migración con datos previos y su `down`. Las pruebas de WhatsApp cubren la verificación del webhook, la firma HMAC, la idempotencia por `waMessageId`, la creación y reutilización del paciente, el aviso y consentimiento, los estados `sent`/`delivered`/`read`/`failed`, los tipos no soportados, la ventana de 24 h, los reintentos del envío, el simulador, los logs sin datos personales y la migración del canal.
+La suite usa el runner integrado de Node y cubre la conversión de horas, el cálculo del día de la semana, la generación de bloques para servicios de 30, 45 y 60 minutos, el receso de almuerzo, el cierre, los bloqueos por citas, los cupos ya transcurridos del día y la validación de horario de las citas. Las pruebas de citas cubren crear y editar con y sin cruce, el día cerrado, la agenda llena, eliminar una cita cancelada, el rechazo `409` al eliminar una cita programada y el `404` de una cita inexistente. Las pruebas de solicitudes cubren las transiciones permitidas y prohibidas, el comentario obligatorio, el historial con usuario, los efectos de cancelación y reprogramación, el rollback ante un cruce con alternativas, los filtros y la paginación, los permisos de staff y la migración con datos previos y su `down`. Las pruebas de WhatsApp cubren la verificación del webhook, la firma HMAC, la idempotencia por `waMessageId`, la creación y reutilización del paciente, el aviso y consentimiento, los estados `sent`/`delivered`/`read`/`failed`, los tipos no soportados, la ventana de 24 h, los reintentos del envío, el simulador, los logs sin datos personales y la migración del canal. Las transcripciones del flujo cubren el camino feliz de reserva, la doble confirmación, los días sin cupo, la disponibilidad, las opciones inválidas, el reinicio a mitad del flujo, el conflicto `409`, los atajos, los servicios y horarios, los límites de WhatsApp y el estado `humano`.

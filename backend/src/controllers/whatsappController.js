@@ -53,11 +53,12 @@ const recibir = (req, res) => {
 
 const simular = async (req, res) => {
   try {
-    const { telefono, texto, boton } = req.body || {};
+    const { telefono, texto, boton, seleccion } = req.body || {};
     const resultado = await whatsappService.simularMensajeEntrante({
       telefono,
       texto,
-      boton
+      boton,
+      seleccion
     });
 
     return res.status(200).json(resultado);

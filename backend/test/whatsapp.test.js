@@ -3,15 +3,50 @@ const assert = require('node:assert/strict');
 const db = require('../src/models');
 const whatsappApi = require('../src/services/whatsappApi');
 const whatsappService = require('../src/services/whatsappService');
+const whatsappFlujo = require('../src/services/whatsappFlujo');
 const whatsappController = require('../src/controllers/whatsappController');
 const { calcularFirma, firmaValida } = require('../src/utils/firmaWhatsapp');
 const { limpiarDatos, registrar } = require('../src/utils/registroWhatsapp');
 const {
   MAPEO_ESTADOS_META,
+  MENSAJE_DISCULPA,
   MENSAJE_PRIVACIDAD,
   MENSAJE_TIPO_NO_SOPORTADO,
-  MOTIVO_VENTANA_CERRADA
+  MOTIVO_VENTANA_CERRADA,
+  parsearContextoJson
 } = require('../src/utils/whatsapp');
+
+test('parsearContextoJson tolera el JSON que MySQL devuelve como texto', () => {
+  assert.deepEqual(parsearContextoJson('{"servicioId":1,"hora":"08:00"}'), {
+    servicioId: 1,
+    hora: '08:00'
+  });
+  assert.deepEqual(parsearContextoJson({ fecha: '2026-10-30' }), {
+    fecha: '2026-10-30'
+  });
+  assert.equal(parsearContextoJson(null), null);
+  assert.equal(parsearContextoJson(undefined), null);
+  // Un JSON corrupto no debe romper el flujo: se reinicia el contexto.
+  assert.deepEqual(parsearContextoJson('{roto'), {});
+});
+
+test('Conversacion.contexto se lee siempre como objeto', () => {
+  const conversacion = db.Conversacion.build({ telefono: '3001234567' });
+
+  // Simula la columna LONGTEXT que devuelve el driver de MySQL/MariaDB.
+  conversacion.setDataValue('contexto', '{"servicioId":1,"hora":"08:00"}');
+
+  assert.deepEqual(conversacion.contexto, { servicioId: 1, hora: '08:00' });
+
+  conversacion.contexto = { fecha: '2026-10-30' };
+
+  assert.deepEqual(conversacion.contexto, { fecha: '2026-10-30' });
+  assert.equal(typeof conversacion.getDataValue('contexto'), 'object');
+
+  conversacion.setDataValue('contexto', null);
+
+  assert.equal(conversacion.contexto, null);
+});
 
 const crearRespuesta = () => ({
   status(codigo) {
@@ -156,13 +191,18 @@ test('un mensaje entrante crea paciente y conversación, guarda y responde el av
 
   assert.equal(estado.entrantes.length, 1);
   assert.equal(estado.entrantes[0].contenido, 'Hola, quiero una cita');
-  assert.equal(estado.salientes.length, 1);
-  assert.equal(resultado.respuestas.length, 1);
+  // Primer contacto: aviso de privacidad + menú interactivo.
+  assert.equal(estado.salientes.length, 2);
+  assert.equal(resultado.respuestas.length, 2);
   assert.equal(resultado.respuestas[0].contenido, MENSAJE_PRIVACIDAD);
   assert.equal(resultado.respuestas[0].estado, 'enviado');
   assert.equal(resultado.respuestas[0].direccion, 'saliente');
+  assert.equal(resultado.respuestas[1].tipo, 'interactivo');
+  assert.equal(resultado.respuestas[1].estado, 'enviado');
+  assert.match(resultado.respuestas[1].contenido, /Servicios y horarios/);
+  assert.ok(resultado.respuestas[1].payload?.interactivo?.action?.sections?.[0]?.rows?.length);
   assert.ok(estado.conversacion.consentimientoAceptadoEn instanceof Date);
-  assert.equal(estado.conversacion.estadoFlujo, 'aviso_enviado');
+  assert.equal(estado.conversacion.estadoFlujo, 'menu');
   assert.equal(api.mock.callCount(), 0);
 });
 
@@ -187,10 +227,13 @@ test('reutiliza el paciente y la conversación y no repite el aviso', async (t) 
 
   assert.equal(estado.pacienteCreado, null);
   assert.equal(resultado.paciente, PACIENTE_EXISTENTE);
-  assert.equal(resultado.respuestas.length, 0);
+  // Sin aviso pendiente, el mensaje entra directo al menú.
+  assert.equal(resultado.respuestas.length, 1);
+  assert.equal(resultado.respuestas[0].tipo, 'interactivo');
   assert.equal(estado.entrantes.length, 1);
-  assert.equal(estado.salientes.length, 0);
-  assert.equal(conversacion.actualizaciones.length, 2);
+  assert.equal(estado.salientes.length, 1);
+  assert.equal(conversacion.estadoFlujo, 'menu');
+  assert.equal(conversacion.actualizaciones.length, 4);
 });
 
 test('un waMessageId repetido se ignora y no genera respuestas', async (t) => {
@@ -303,6 +346,36 @@ test('guarda el fallo de envío sin incluir datos sensibles en el motivo', async
   assert.equal(api.mock.callCount(), 1);
 });
 
+test('un error interno del flujo deriva a una persona y pide disculpas', async (t) => {
+  const conversacion = crearConversacion({ consentimientoAceptadoEn: new Date() });
+  const estado = prepararPipeline(t, {
+    pacienteExistente: PACIENTE_EXISTENTE,
+    conversacion,
+    creada: false
+  });
+
+  t.mock.method(whatsappFlujo, 'procesar', async () => {
+    throw new Error('fallo inesperado');
+  });
+
+  const resultado = await whatsappService.procesarMensajeEntrante(
+    {
+      telefono: '573001234567',
+      waMessageId: 'wamid.error-flujo',
+      tipo: 'texto',
+      contenido: 'Quiero una cita',
+      ocurridoEn: new Date()
+    },
+    { simulado: true }
+  );
+
+  assert.equal(conversacion.estadoFlujo, 'humano');
+  assert.equal(resultado.respuestas.length, 1);
+  assert.equal(resultado.respuestas[0].contenido, MENSAJE_DISCULPA);
+  assert.equal(resultado.respuestas[0].estado, 'enviado');
+  assert.equal(estado.salientes.length, 1);
+});
+
 for (const [estadoMeta, estadoInterno] of Object.entries(MAPEO_ESTADOS_META)) {
   test(`actualiza el mensaje saliente al estado ${estadoInterno}`, async (t) => {
     const mensaje = {
@@ -398,8 +471,10 @@ test('el simulador inyecta un entrante por el mismo pipeline sin llamar a Meta',
 
   assert.equal(resultado.duplicado, false);
   assert.equal(resultado.conversacionId, 10);
-  assert.equal(resultado.respuestas.length, 1);
+  assert.equal(resultado.estadoFlujo, 'menu');
+  assert.equal(resultado.respuestas.length, 2);
   assert.equal(resultado.respuestas[0].contenido, MENSAJE_PRIVACIDAD);
+  assert.equal(resultado.respuestas[1].tipo, 'interactivo');
   assert.equal(estado.entrantes[0].contenido, 'Quiero agendar');
   assert.equal(estado.entrantes[0].tipo, 'texto');
   assert.match(estado.entrantes[0].waMessageId, /^simulado-entrante-/);
@@ -414,7 +489,7 @@ test('el simulador acepta botones y valida la entrada', async (t) => {
     boton: 'Agendar cita'
   });
 
-  assert.equal(resultado.respuestas.length, 1);
+  assert.equal(resultado.respuestas.length, 2);
   assert.equal(estado.entrantes[0].tipo, 'boton');
   assert.equal(estado.entrantes[0].contenido, 'Agendar cita');
 
@@ -426,6 +501,58 @@ test('el simulador acepta botones y valida la entrada', async (t) => {
     whatsappService.simularMensajeEntrante({ telefono: '3001234567' }),
     (error) => error.statusCode === 400
   );
+});
+
+test('el simulador acepta una selección interactiva por id', async (t) => {
+  const conversacion = crearConversacion({
+    consentimientoAceptadoEn: new Date(),
+    estadoFlujo: 'menu'
+  });
+  const estado = prepararPipeline(t, {
+    pacienteExistente: PACIENTE_EXISTENTE,
+    conversacion,
+    creada: false
+  });
+
+  const resultado = await whatsappService.simularMensajeEntrante({
+    telefono: '3001234567',
+    seleccion: 'menu:humano'
+  });
+
+  assert.equal(estado.entrantes[0].tipo, 'interactivo');
+  assert.equal(estado.entrantes[0].contenido, 'menu:humano');
+  assert.equal(resultado.estadoFlujo, 'humano');
+  assert.equal(resultado.respuestas.length, 1);
+  assert.equal(resultado.respuestas[0].tipo, 'texto');
+});
+
+test('el controlador del simulador reenvía la selección interactiva', async (t) => {
+  let recibido = null;
+
+  t.mock.method(whatsappService, 'simularMensajeEntrante', async (datos) => {
+    recibido = datos;
+
+    return { estadoFlujo: 'menu', respuestas: [] };
+  });
+
+  const res = crearRespuesta();
+  await whatsappController.simular(
+    {
+      body: {
+        telefono: '3001234567',
+        seleccion: 'menu:solicitar'
+      }
+    },
+    res
+  );
+
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(recibido, {
+    telefono: '3001234567',
+    texto: undefined,
+    boton: undefined,
+    seleccion: 'menu:solicitar'
+  });
 });
 
 test('el simulador está bloqueado en producción sin la variable explícita', async () => {

@@ -11,16 +11,19 @@ const { registrar, registrarError } = require('../utils/registroWhatsapp');
 const {
   ESTADOS_FLUJO,
   MAPEO_ESTADOS_META,
+  MENSAJE_DISCULPA,
   MENSAJE_PRIVACIDAD,
   MENSAJE_TIPO_NO_SOPORTADO,
   MOTIVO_VENTANA_CERRADA,
   RANGO_ESTADO,
   TIPOS_SOPORTADOS,
   extraerContenido,
+  extraerSeleccion,
   fechaDesdeTimestamp,
   mapearTipoMeta
 } = require('../utils/whatsapp');
 const whatsappApi = require('./whatsappApi');
+const whatsappFlujo = require('./whatsappFlujo');
 
 const NOMBRE_CONTACTO_POR_DEFECTO = 'Contacto WhatsApp';
 const NOMBRE_MAX = 100;
@@ -160,7 +163,8 @@ const enviarYGuardar = async ({
   contenido,
   textoPlano,
   tipo = 'texto',
-  simulado = false
+  simulado = false,
+  payload = null
 }) => {
   const ahora = new Date();
   const abierta = await ventanaAbierta(conversacion);
@@ -171,6 +175,7 @@ const enviarYGuardar = async ({
       direccion: 'saliente',
       tipo,
       contenido: textoPlano ?? null,
+      payload,
       estado: 'fallido',
       ocurridoEn: ahora,
       estadoActualizadoEn: ahora,
@@ -198,6 +203,7 @@ const enviarYGuardar = async ({
       direccion: 'saliente',
       tipo,
       contenido: textoPlano ?? null,
+      payload,
       estado: 'fallido',
       ocurridoEn: ahora,
       estadoActualizadoEn: ahora,
@@ -218,6 +224,7 @@ const enviarYGuardar = async ({
     direccion: 'saliente',
     tipo,
     contenido: textoPlano ?? null,
+    payload,
     estado: 'enviado',
     ocurridoEn: ahora,
     estadoActualizadoEn: ahora
@@ -226,6 +233,29 @@ const enviarYGuardar = async ({
   await conversacion.update({ ultimaActividad: ahora });
 
   return mensaje;
+};
+
+/**
+ * Persiste y entrega las salidas que produce la máquina de estados. Cada salida
+ * puede ser texto plano o un mensaje interactivo ya construido.
+ */
+const enviarSalidas = async (conversacion, salidas, respuestas, { simulado }) => {
+  for (const salida of Array.isArray(salidas) ? salidas : []) {
+    const interactivo = salida?.contenido && typeof salida.contenido === 'object';
+
+    respuestas.push(
+      await enviarYGuardar({
+        conversacion,
+        contenido: salida.contenido,
+        textoPlano: salida.textoPlano,
+        tipo: interactivo ? 'interactivo' : 'texto',
+        payload: interactivo ? salida.contenido : null,
+        simulado
+      })
+    );
+  }
+
+  return respuestas;
 };
 
 const enviarAvisoPrivacidad = async (conversacion, { simulado }) => {
@@ -316,9 +346,24 @@ const procesarMensajeEntrante = async (datos, opciones = {}) => {
   await conversacion.update({ ultimaActividad: new Date() });
 
   const respuestas = [];
+  let avisoEnviado = false;
 
   if (!conversacion.consentimientoAceptadoEn) {
     respuestas.push(await enviarAvisoPrivacidad(conversacion, { simulado }));
+
+    // Si el aviso no se entregó no tiene sentido seguir con el flujo: el
+    // paciente no lo vería. Se reintenta en el próximo mensaje.
+    if (respuestas.at(-1)?.estado === 'fallido') {
+      return {
+        duplicado: false,
+        conversacion,
+        paciente,
+        mensaje,
+        respuestas
+      };
+    }
+
+    avisoEnviado = true;
   }
 
   if (!TIPOS_SOPORTADOS.includes(mensaje.tipo)) {
@@ -330,6 +375,59 @@ const procesarMensajeEntrante = async (datos, opciones = {}) => {
         simulado
       })
     );
+
+    if (avisoEnviado) {
+      await enviarSalidas(
+        conversacion,
+        await whatsappFlujo.abrirMenu(conversacion, { saludo: false }),
+        respuestas,
+        { simulado }
+      );
+    }
+
+    return {
+      duplicado: false,
+      conversacion,
+      paciente,
+      mensaje,
+      respuestas
+    };
+  }
+
+  try {
+    const salidas = avisoEnviado
+      ? await whatsappFlujo.abrirMenu(conversacion, { saludo: true })
+      : await whatsappFlujo.procesar({
+        conversacion,
+        paciente,
+        mensaje,
+        seleccion: datos?.seleccion ?? null
+      });
+
+    await enviarSalidas(conversacion, salidas, respuestas, { simulado });
+  } catch (error) {
+    // El flujo nunca debe dejar al paciente sin respuesta: se registra el fallo,
+    // se deriva a una persona y se responde con una disculpa.
+    registrarError('flujo_error', error, {
+      conversacionId: conversacion.id,
+      mensajeId: mensaje.id
+    });
+
+    try {
+      await conversacion.update({ estadoFlujo: ESTADOS_FLUJO.HUMANO });
+
+      await enviarSalidas(
+        conversacion,
+        [{ contenido: MENSAJE_DISCULPA, textoPlano: MENSAJE_DISCULPA }],
+        respuestas,
+        { simulado }
+      );
+    } catch (errorAviso) {
+      registrarError('flujo_error_aviso', errorAviso, {
+        conversacionId: conversacion.id,
+        mensajeId: mensaje.id
+      });
+    }
   }
 
   return {
@@ -411,7 +509,8 @@ const procesarEventoWebhook = async (payload, opciones = {}) => {
               contenido: extraerContenido(mensajeMeta),
               ocurridoEn: fechaDesdeTimestamp(mensajeMeta.timestamp) ?? new Date(),
               nombrePerfil: perfiles.get(String(mensajeMeta.from)) ?? null,
-              payload: mensajeMeta
+              payload: mensajeMeta,
+              seleccion: extraerSeleccion(mensajeMeta)
             },
             opciones
           );
@@ -463,12 +562,30 @@ const normalizarBotonSimulado = (boton) => {
   return null;
 };
 
+const normalizarSeleccionSimulada = (seleccion) => {
+  if (typeof seleccion === 'string' && seleccion.trim()) {
+    return { id: seleccion.trim().slice(0, 200), titulo: null };
+  }
+
+  if (seleccion && typeof seleccion === 'object' && typeof seleccion.id === 'string') {
+    return {
+      id: seleccion.id.trim().slice(0, 200),
+      titulo: typeof seleccion.titulo === 'string' ? seleccion.titulo.slice(0, 200) : null
+    };
+  }
+
+  return null;
+};
+
 /**
  * Inyecta un mensaje entrante por el mismo pipeline, sin firma de Meta y sin
  * llamar a la Graph API. Solo disponible fuera de producción o con
  * WHATSAPP_SIMULADOR=1.
+ *
+ * `seleccion` permite simular la pulsación de un botón o fila de lista usando
+ * su id (por ejemplo `menu:solicitar` o `hora:08:00`).
  */
-const simularMensajeEntrante = async ({ telefono, texto, boton } = {}) => {
+const simularMensajeEntrante = async ({ telefono, texto, boton, seleccion } = {}) => {
   if (!esSimuladorHabilitado()) {
     throw errorNegocio('El simulador no está habilitado', 404);
   }
@@ -481,13 +598,21 @@ const simularMensajeEntrante = async ({ telefono, texto, boton } = {}) => {
 
   const textoNormalizado = normalizarTextoSimulado(texto);
   const botonNormalizado = normalizarBotonSimulado(boton);
+  const seleccionExplicita = normalizarSeleccionSimulada(seleccion);
 
-  if (!textoNormalizado && !botonNormalizado) {
-    throw errorNegocio('Debes enviar un texto o un botón');
+  if (!textoNormalizado && !botonNormalizado && !seleccionExplicita) {
+    throw errorNegocio('Debes enviar un texto, un botón o una selección');
   }
 
-  const tipo = botonNormalizado ? 'boton' : 'texto';
-  const contenido = botonNormalizado || textoNormalizado;
+  const tipo = seleccionExplicita ? 'interactivo' : botonNormalizado ? 'boton' : 'texto';
+  const contenido =
+    botonNormalizado ||
+    textoNormalizado ||
+    seleccionExplicita.titulo ||
+    seleccionExplicita.id;
+  const seleccionNormalizada =
+    seleccionExplicita ||
+    (botonNormalizado ? { id: botonNormalizado, titulo: botonNormalizado } : null);
 
   const resultado = await procesarMensajeEntrante(
     {
@@ -497,7 +622,8 @@ const simularMensajeEntrante = async ({ telefono, texto, boton } = {}) => {
       contenido,
       ocurridoEn: new Date(),
       nombrePerfil: 'Simulador local',
-      payload: { simulado: true, tipo, contenido }
+      payload: { simulado: true, tipo, contenido, seleccion: seleccionNormalizada },
+      seleccion: seleccionNormalizada
     },
     { simulado: true }
   );
@@ -506,11 +632,13 @@ const simularMensajeEntrante = async ({ telefono, texto, boton } = {}) => {
     conversacionId: resultado.conversacion?.id ?? null,
     mensajeId: resultado.mensaje?.id ?? null,
     duplicado: Boolean(resultado.duplicado),
+    estadoFlujo: resultado.conversacion?.estadoFlujo ?? null,
     respuestas: (resultado.respuestas || []).map((mensaje) => ({
       id: mensaje.id,
       direccion: mensaje.direccion,
       tipo: mensaje.tipo,
       contenido: mensaje.contenido,
+      payload: mensaje.payload ?? null,
       estado: mensaje.estado,
       requierePlantilla: Boolean(mensaje.requierePlantilla),
       motivo: mensaje.motivoFallo ?? null
