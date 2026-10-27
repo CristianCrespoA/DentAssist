@@ -8,8 +8,8 @@ Los pacientes gestionan sus citas y solicitudes por WhatsApp.
 
 La aplicación web vive en [`frontend/`](frontend/README.md) (React + Vite + Tailwind CSS). Incluye el
 sistema de diseño, el app shell responsive, las rutas protegidas, el cliente API compartido, el
-CRUD de pacientes, la agenda por día y por todas las fechas, y el formulario de crear/editar citas
-con disponibilidad en vivo.
+CRUD de pacientes, la agenda por día y por todas las fechas, el formulario de crear/editar citas
+con disponibilidad en vivo y la bandeja de solicitudes por estado con su historial y acciones.
 
 Todas las rutas requieren el header `Authorization: Bearer <token>`.
 
@@ -178,6 +178,19 @@ Si la solicitud de reprogramación no tiene `fechaPropuesta`/`horaPropuesta` o n
 La migración `20241025000009-solicitudes-estados-historial.js` amplía temporalmente el ENUM de MySQL, convierte `aprobada` y `rechazada` en `resuelta`, crea una fila de historial por cada fila migrada (con comentario y sin usuario, porque no hay actor original) y deja el ENUM final con `pendiente`, `en_atencion` y `resuelta`. También agrega `tipo` (por defecto `otra`), `citaId`, `fechaPropuesta`, `horaPropuesta` y `origen` (por defecto `whatsapp`), y enlaza las citas existentes que ya apuntaban a una solicitud. El ENUM del historial conserva `aprobada` y `rechazada` para no perder el estado original.
 
 El `down` es explícito: recupera el estado original desde la primera fila de historial cuando existe, usa `pendiente` para `en_atencion` y `aprobada` como equivalencia para una `resuelta` sin historial, y después elimina las columnas nuevas y la tabla de historial.
+
+### Interfaz web de solicitudes
+
+La ruta `/solicitudes` del frontend opera esta API:
+
+- **Pestañas y contadores:** «Pendientes», «En atención», «Resueltas» y «Todas» con el total de cada estado. Los contadores se calculan con cuatro peticiones de `limite=1` al listado, reutilizando los filtros activos.
+- **Filtros y URL:** tipo, fecha de recepción y paciente (búsqueda remota) con paginación de 10 por página. El estado se guarda en `?estado=&tipo=&fecha=&pacienteId=&pagina=&solicitud=` para conservar pestaña, filtros, página y detalle al refrescar o compartir; los valores inválidos se descartan con `replace`.
+- **Listado:** fecha y hora de recepción en `America/Bogota`, paciente, tipo, resumen del mensaje, estado como badge y acciones. La fila abre el detalle y el botón de acción rápida toma la solicitud en atención.
+- **Detalle e historial:** modal con los datos del paciente, el mensaje original, la cita vinculada (con enlace a `/agenda?fecha=…`), la propuesta de fecha/hora si es reprogramación y la línea de tiempo del historial con usuario y comentario. El detalle permanece abierto tras cada acción.
+- **Acciones:** «Tomar en atención» y «Resolver»; resolver exige un `ConfirmDialog` con comentario obligatorio y vista previa del efecto (cancelar o mover la cita). Cada acción refresca la lista y los contadores, y muestra un toast.
+- **Errores:** un `409` de franja ocupada se muestra dentro del diálogo con las horas libres del día (`alternativas`) y un enlace a la agenda para elegir otro horario; ni la cita ni la solicitud se modifican. Los `400`, `404` y errores de red se explican sin cerrar el detalle.
+
+El contexto de conversación (transcripción) llegará con el modelo de conversaciones del PR 10; en este PR el detalle muestra el `mensaje` guardado en la solicitud.
 
 ## API de pacientes
 

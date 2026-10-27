@@ -76,8 +76,7 @@ No se usan estilos inline. Las clases condicionales se combinan con `cn` desde
 
 - `/` redirige a `/agenda`.
 - `/agenda` es una ruta protegida con la agenda por día y por todas las fechas.
-- `/solicitudes` es una ruta protegida y muestra una página provisional «en
-  construcción» hasta el PR 9.
+- `/solicitudes` es una ruta protegida con la bandeja de solicitudes por estado.
 - `/pacientes` es una ruta protegida con el CRUD completo de pacientes.
 - Cualquier ruta desconocida redirige a `/agenda` (sin 404).
 - `/login` es pública; si ya hay sesión redirige a `/agenda`.
@@ -196,6 +195,61 @@ en `src/lib/citas.js`. Los componentes están en `src/components/agenda/` y los
 servicios de catálogo y disponibilidad en `src/services/servicios.js`,
 `src/services/profesionales.js` y `src/services/disponibilidad.js`.
 
+## Solicitudes
+
+`/solicitudes` opera la API del PR 8 (`src/services/solicitudes.js`) y cierra el
+ciclo de lo que llega por WhatsApp:
+
+- **Pestañas y contadores:** «Pendientes», «En atención», «Resueltas» y «Todas»,
+  con el total de cada estado. Son un `tablist` accesible: flechas izquierda y
+  derecha para moverse, `Home`/`End` para ir al primero o al último, y el
+  contador anuncia su valor con `aria-label`. Los totales se calculan con cuatro
+  peticiones de `limite=1` al listado (`contarSolicitudes`), reutilizando los
+  filtros activos y sin endpoint adicional.
+- **URL como fuente de verdad:** `?estado=&tipo=&fecha=&pacienteId=&pagina=&solicitud=`
+  mediante `useSearchParams`; refrescar o compartir el enlace conserva pestaña,
+  filtros, página y detalle abierto. Los valores inválidos y los parámetros
+  desconocidos se descartan con `replace`, y `pagina` vuelve a la última página
+  con resultados si tras resolver queda fuera de rango.
+- **Filtros:** tipo, fecha de recepción y paciente con el combobox reutilizable
+  de la agenda (búsqueda remota con debounce de 300 ms). «Limpiar filtros» quita
+  tipo, fecha y paciente; la pestaña se conserva.
+- **Listado:** fecha y hora de recepción en `America/Bogota`, paciente, tipo,
+  resumen del mensaje, estado como badge y acciones. La fila abre el detalle con
+  clic, `Enter` o `Espacio`; el botón de acción rápida toma la solicitud en
+  atención sin salir de la lista. Paginación de 10 por página con resumen
+  «desde–hasta de total».
+- **Detalle:** modal accesible con los datos de contacto del paciente, el
+  mensaje original guardado, el servicio, la cita vinculada (fecha, hora,
+  profesional, estado y enlace a `/agenda?fecha=…` con el paciente filtrado) y,
+  en reprogramaciones, la fecha y hora propuestas. Incluye la línea de tiempo del
+  historial con el cambio de estado, comentario, usuario y fecha.
+- **Tomar en atención:** acción directa con toast y refresco de la lista y los
+  contadores; la solicitud pasa a la pestaña «En atención».
+- **Resolver:** `ConfirmDialog` con comentario obligatorio y vista previa del
+  efecto antes de confirmar («la cita se cancelará» o «la cita se moverá» con el
+  horario original y el propuesto). El detalle permanece abierto tras resolver y
+  muestra el nuevo estado, el historial actualizado y cómo quedó la cita.
+- **Errores de negocio:** un `409` de franja ocupada se muestra dentro del mismo
+  diálogo con las horas libres de ese día (`datos.alternativas`) y un enlace a la
+  agenda para elegir otro horario; ni la cita ni la solicitud se modifican. Un
+  `400` (por ejemplo, falta de comentario) o un horario fuera de atención también
+  se muestran sin cerrar el detalle. Un `404` al abrir el detalle ofrece
+  «Reintentar».
+- **Estados:** carga, vacío por pestaña o por filtros (con acción para limpiar o
+  ver pendientes), error de red con reintento y aviso si fallan solo los
+  contadores. Cada acción exitosa refresca la lista y muestra un toast; los
+  fallos de las acciones rápidas se notifican sin perder la vista.
+
+La lógica de estados, tipos, orígenes, formato de fechas y textos del efecto vive
+en `src/lib/solicitudes.js`; el detalle y las acciones están en
+`src/components/solicitudes/SolicitudDetalleModal.jsx`.
+
+El contexto de conversación (transcripción de WhatsApp) llegará con el modelo de
+conversaciones del PR 10; por ahora el detalle muestra el `mensaje` guardado en
+la solicitud.
+
+
 ## Calidad
 
 No hay runner de pruebas unitarias en el frontend. Cada cambio se valida con:
@@ -208,8 +262,12 @@ npm run build
 La agenda se verifica manualmente con backend y MySQL en marcha: crear y editar
 con y sin cruce de horario, día cerrado o sin cupos, eliminar una cita cancelada,
 intento de eliminar una programada (`409`), doble submit y expiración de sesión
-(`401`). Las reglas de negocio de citas y disponibilidad se cubren con
-`npm test` en [`../backend/`](../README.md#pruebas).
+(`401`). La bandeja de solicitudes se verifica llevando una solicitud de
+pendiente a resuelta desde la UI, comprobando el historial, la cancelación o el
+movimiento de la cita en `/agenda`, el `409` de una reprogramación ocupada con
+sus alternativas y que los errores de negocio no cierran el detalle. Las reglas
+de negocio de citas, disponibilidad y solicitudes se cubren con `npm test` en
+[`../backend/`](../README.md#pruebas).
 
 ## Accesibilidad y responsive
 
@@ -221,8 +279,9 @@ intento de eliminar una programada (`409`), doble submit y expiración de sesió
 - Objetivos táctiles de al menos 32–40 px y layouts probados a 360, 768 y
   1280 px.
 - Las tablas se convierten en tarjetas por debajo del breakpoint `md`.
-- Las filas clicables de la agenda son enfocables y se activan con `Enter` o
-  `Espacio`; el conmutador de vista anuncia su estado con `aria-pressed`, el
-  selector de paciente anuncia su valor actual y los encabezados de columna solo
-  visuales conservan su nombre accesible.
+- Las filas clicables de la agenda y de solicitudes son enfocables y se activan
+  con `Enter` o `Espacio`; el conmutador de vista de la agenda anuncia su estado
+  con `aria-pressed`, la bandeja de solicitudes usa un `tablist` con navegación
+  por flechas y `Home`/`End`, el selector de paciente anuncia su valor actual y
+  los encabezados de columna solo visuales conservan su nombre accesible.
 - Se respeta `prefers-reduced-motion`.
