@@ -336,6 +336,11 @@ function SolicitudDetalleModal({
               <span className="text-xs text-neutral-500">
                 Origen: {origen.etiqueta}
               </span>
+              {solicitud.conversacionId ? (
+                <span className="text-xs text-neutral-500">
+                  Conversación #{solicitud.conversacionId}
+                </span>
+              ) : null}
               {procesando ? (
                 <span className="ml-auto flex items-center gap-2 text-xs text-neutral-500">
                   <Spinner size="sm" label={null} />

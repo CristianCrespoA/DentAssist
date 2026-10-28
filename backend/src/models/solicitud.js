@@ -9,6 +9,11 @@ module.exports = (sequelize, DataTypes) => {
       Solicitud.belongsTo(models.Servicio, { foreignKey: 'servicioId', as: 'servicio' });
       // Cita que se atiende o reprograma desde esta solicitud.
       Solicitud.belongsTo(models.Cita, { foreignKey: 'citaId', as: 'cita' });
+      // Conversación de WhatsApp que originó la solicitud, si aplica.
+      Solicitud.belongsTo(models.Conversacion, {
+        foreignKey: 'conversacionId',
+        as: 'conversacion'
+      });
       // Vínculo histórico inverso: cita que pudo haberse creado a partir de la solicitud.
       Solicitud.hasOne(models.Cita, { foreignKey: 'solicitudId', as: 'citaGenerada' });
       Solicitud.hasMany(models.SolicitudHistorial, {
@@ -21,6 +26,7 @@ module.exports = (sequelize, DataTypes) => {
     pacienteId: DataTypes.INTEGER,
     servicioId: DataTypes.INTEGER,
     citaId: DataTypes.INTEGER,
+    conversacionId: DataTypes.INTEGER,
     mensaje: DataTypes.TEXT,
     tipo: DataTypes.ENUM('cancelacion', 'reprogramacion', 'consulta', 'otra'),
     estado: DataTypes.ENUM('pendiente', 'en_atencion', 'resuelta'),

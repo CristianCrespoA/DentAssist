@@ -65,6 +65,10 @@ const ESTADOS_FLUJO = {
   SOLICITAR_FECHA: 'solicitar_fecha',
   SOLICITAR_HORA: 'solicitar_hora',
   CONFIRMAR: 'confirmar',
+  CANCELAR_CITA: 'cancelar_cita',
+  REPROGRAMAR_CITA: 'reprogramar_cita',
+  REPROGRAMAR_FECHA: 'reprogramar_fecha',
+  REPROGRAMAR_HORA: 'reprogramar_hora',
   HUMANO: 'humano'
 };
 
@@ -88,6 +92,21 @@ const MENSAJE_DISCULPA =
 
 const MENSAJE_HUMANO =
   '👩‍💼 Listo, dejé tu solicitud para que una persona de recepción te contacte. Si quieres volver al menú, escribe *menú*.';
+
+const MENSAJE_SIN_CITAS =
+  'No encontré citas futuras a tu nombre. Si crees que es un error, escribe *menú* y elige *Hablar con una persona*.';
+
+const MENSAJE_CANCELACION_PENDIENTE =
+  '📝 Dejé tu solicitud de cancelación para que recepción la revise. La cita sigue activa hasta que la confirmen; te avisaremos por aquí.';
+
+const MENSAJE_REPROGRAMACION_PENDIENTE =
+  '📝 Dejé tu solicitud de reprogramación para que recepción la valide. La cita actual sigue activa hasta que la confirmen; te avisaremos por aquí.';
+
+const MENSAJE_SOLICITUD_ABIERTA =
+  'Ya tienes una solicitud pendiente para esa cita. Recepción la revisará y te avisará por aquí.';
+
+const MENSAJE_CITA_NO_DISPONIBLE =
+  'Esa cita ya no está disponible para gestionar. Escribe *menú* para volver a empezar.';
 
 const parsearContextoJson = (valor) => {
   if (typeof valor !== 'string') return valor ?? null;
@@ -165,9 +184,14 @@ module.exports = {
   ESTADOS_FLUJO,
   ESTADOS_MENSAJE,
   MAPEO_ESTADOS_META,
+  MENSAJE_CANCELACION_PENDIENTE,
+  MENSAJE_CITA_NO_DISPONIBLE,
   MENSAJE_DISCULPA,
   MENSAJE_HUMANO,
   MENSAJE_PRIVACIDAD,
+  MENSAJE_REPROGRAMACION_PENDIENTE,
+  MENSAJE_SIN_CITAS,
+  MENSAJE_SOLICITUD_ABIERTA,
   MENSAJE_TIPO_NO_SOPORTADO,
   MOTIVO_VENTANA_CERRADA,
   RANGO_ESTADO,

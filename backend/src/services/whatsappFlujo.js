@@ -3,8 +3,10 @@
 const { Op } = require('sequelize');
 const db = require('../models');
 const citaService = require('./citaService');
+const solicitudWhatsappService = require('./solicitudWhatsappService');
 const { obtenerDiaSemana, obtenerRangosDelDia } = require('./agendaService');
 const { DURACION_POR_DEFECTO, ESTADOS_SIN_OCUPAR, generarFranjas } = require('../utils/agenda');
+const { registrarError } = require('../utils/registroWhatsapp');
 const {
   aMinutos,
   esFechaValida,
@@ -12,7 +14,15 @@ const {
   formatearMinutos,
   horaActualBogota
 } = require('../utils/tiempo');
-const { ESTADOS_FLUJO, MENSAJE_HUMANO } = require('../utils/whatsapp');
+const {
+  ESTADOS_FLUJO,
+  MENSAJE_CANCELACION_PENDIENTE,
+  MENSAJE_CITA_NO_DISPONIBLE,
+  MENSAJE_HUMANO,
+  MENSAJE_REPROGRAMACION_PENDIENTE,
+  MENSAJE_SIN_CITAS,
+  MENSAJE_SOLICITUD_ABIERTA
+} = require('../utils/whatsapp');
 const {
   botones,
   formatearFecha,
@@ -50,12 +60,12 @@ const FILAS_MENU = [
   {
     id: 'menu:cancelar',
     titulo: 'Cancelar cita',
-    descripcion: 'Gestionar con recepción'
+    descripcion: 'Elige la cita a cancelar'
   },
   {
     id: 'menu:reprogramar',
     titulo: 'Reprogramar',
-    descripcion: 'Gestionar con recepción'
+    descripcion: 'Propón una nueva fecha'
   },
   {
     id: 'menu:humano',
@@ -77,7 +87,9 @@ const LIMPIAR_RESERVA = {
   hora: null,
   franjasOfertadas: null,
   opciones: null,
-  diasOfrecidos: null
+  diasOfrecidos: null,
+  citaId: null,
+  citaOriginal: null
 };
 
 const leerContexto = (conversacion) => {
@@ -210,7 +222,8 @@ const calcularFranjasDelDia = async ({
   fecha,
   duracionMinutos,
   profesionalId = null,
-  pacienteId = null
+  pacienteId = null,
+  excluirCitaId = null
 }) => {
   if (!esFechaValida(fecha)) return { cerrado: false, franjas: [] };
 
@@ -219,7 +232,11 @@ const calcularFranjasDelDia = async ({
   if (!rangos.length) return { cerrado: true, franjas: [] };
 
   const citas = await db.Cita.findAll({
-    where: { fecha, estado: { [Op.notIn]: ESTADOS_SIN_OCUPAR } },
+    where: {
+      fecha,
+      estado: { [Op.notIn]: ESTADOS_SIN_OCUPAR },
+      ...(excluirCitaId ? { id: { [Op.ne]: excluirCitaId } } : {})
+    },
     include: [{ model: db.Servicio, as: 'servicio', attributes: ['id', 'duracionMinutos'] }]
   });
 
@@ -275,7 +292,8 @@ const proximosDiasConCupo = async ({
   cantidad = DIAS_SUGERIDOS,
   duracionMinutos,
   profesionalId = null,
-  pacienteId = null
+  pacienteId = null,
+  excluirCitaId = null
 }) => {
   const dias = [];
 
@@ -285,7 +303,8 @@ const proximosDiasConCupo = async ({
       fecha,
       duracionMinutos,
       profesionalId,
-      pacienteId
+      pacienteId,
+      excluirCitaId
     });
 
     if (franjas.length) dias.push({ fecha, franjas });
@@ -294,11 +313,33 @@ const proximosDiasConCupo = async ({
   return dias;
 };
 
-const derivarHumano = async (conversacion, { encabezado = null } = {}) => {
+const pacienteDe = (conversacion, paciente) =>
+  paciente ?? (conversacion?.pacienteId ? { id: conversacion.pacienteId } : null);
+
+const registrarEscalamiento = async (conversacion, paciente, mensaje) => {
+  try {
+    await solicitudWhatsappService.registrarEscalamiento({
+      conversacion,
+      paciente: pacienteDe(conversacion, paciente),
+      mensaje
+    });
+  } catch (error) {
+    // El paciente siempre debe recibir respuesta aunque falle el registro.
+    registrarError('escalamiento', error, { conversacionId: conversacion?.id });
+  }
+};
+
+const derivarHumano = async (
+  conversacion,
+  paciente = null,
+  { encabezado = null, mensaje = null } = {}
+) => {
   await guardar(conversacion, ESTADOS_FLUJO.HUMANO, {
     ...LIMPIAR_RESERVA,
     humanoDesde: new Date().toISOString()
   });
+
+  await registrarEscalamiento(conversacion, paciente, mensaje);
 
   return [texto([encabezado, MENSAJE_HUMANO].filter(Boolean).join('\n\n'))];
 };
@@ -327,7 +368,8 @@ const construirPasoFecha = async (conversacion, { encabezado = null } = {}) => {
     desde: fechaHoyBogota(),
     duracionMinutos: contexto.duracionMinutos,
     profesionalId: contexto.profesionalId,
-    pacienteId: conversacion.pacienteId
+    pacienteId: conversacion.pacienteId,
+    excluirCitaId: contexto.modo === 'reprogramacion' ? contexto.citaId : null
   });
 
   const opciones = dias.map((dia) => ({
@@ -359,11 +401,12 @@ const mostrarProximosDias = async (conversacion, { desde, encabezado }) => {
     desde,
     duracionMinutos: contexto.duracionMinutos,
     profesionalId: contexto.profesionalId,
-    pacienteId: conversacion.pacienteId
+    pacienteId: conversacion.pacienteId,
+    excluirCitaId: contexto.modo === 'reprogramacion' ? contexto.citaId : null
   });
 
   if (!dias.length) {
-    return derivarHumano(conversacion, {
+    return derivarHumano(conversacion, null, {
       encabezado: `${encabezado} No encontré cupos en las próximas semanas.`
     });
   }
@@ -381,19 +424,27 @@ const mostrarProximosDias = async (conversacion, { desde, encabezado }) => {
   return [botones(`${encabezado}\n\nEstos días tienen cupo:`, opciones)];
 };
 
-const construirPasoHora = async (conversacion, { encabezado = null } = {}) => {
+const construirPasoHora = async (
+  conversacion,
+  {
+    encabezado = null,
+    estadoHora = ESTADOS_FLUJO.SOLICITAR_HORA,
+    estadoFecha = ESTADOS_FLUJO.SOLICITAR_FECHA
+  } = {}
+) => {
   const contexto = leerContexto(conversacion);
   const { franjas } = await calcularFranjasDelDia({
     fecha: contexto.fecha,
     duracionMinutos: contexto.duracionMinutos,
     profesionalId: contexto.profesionalId,
-    pacienteId: conversacion.pacienteId
+    pacienteId: conversacion.pacienteId,
+    excluirCitaId: contexto.modo === 'reprogramacion' ? contexto.citaId : null
   });
 
   if (!franjas.length) {
     // Al ofrecer otros días hay que volver al paso de fecha; si no, la lista de
     // fechas llegaría en un estado que espera una hora.
-    await guardar(conversacion, ESTADOS_FLUJO.SOLICITAR_FECHA, { fecha: null, hora: null });
+    await guardar(conversacion, estadoFecha, { fecha: null, hora: null });
 
     return mostrarProximosDias(conversacion, {
       desde: sumarDias(contexto.fecha, 1),
@@ -410,7 +461,7 @@ const construirPasoHora = async (conversacion, { encabezado = null } = {}) => {
 
   filas.push({ id: 'hora:otro', titulo: 'Otro día', descripcion: 'Elige otra fecha' });
 
-  await guardar(conversacion, ESTADOS_FLUJO.SOLICITAR_HORA, {
+  await guardar(conversacion, estadoHora, {
     franjasOfertadas: visibles,
     opciones: filas.map((fila) => fila.id)
   });
@@ -486,7 +537,7 @@ const construirPasoServicio = async (conversacion, { encabezado = null } = {}) =
   });
 
   if (!servicios.length) {
-    return derivarHumano(conversacion, {
+    return derivarHumano(conversacion, null, {
       encabezado: 'No hay servicios disponibles en este momento.'
     });
   }
@@ -537,7 +588,273 @@ const construirPasoProfesional = async (conversacion, { encabezado = null } = {}
   return [lista(cuerpo, filas, { etiqueta: 'Ver profesionales', seccion: 'Profesionales' })];
 };
 
-const manejarMenu = async (conversacion, entrada, seleccion) => {
+const filasCitas = (citas) =>
+  citas.map((cita) => ({
+    id: `cita:${cita.id}`,
+    titulo: `${formatearFechaCorta(cita.fecha)} · ${String(cita.hora ?? '').slice(0, 5)}`,
+    descripcion: cita.servicio?.nombre || 'Cita'
+  }));
+
+const volverAlMenu = async (conversacion, mensaje) => {
+  await guardar(conversacion, ESTADOS_FLUJO.MENU, {
+    ...LIMPIAR_RESERVA,
+    opciones: FILAS_MENU.map((fila) => fila.id)
+  });
+
+  return [texto(mensaje)];
+};
+
+const iniciarGestionCita = async (conversacion, { tipo, encabezado = null }) => {
+  const citas = await solicitudWhatsappService.listarCitasFuturas(conversacion.pacienteId);
+
+  if (!citas.length) {
+    await guardar(conversacion, ESTADOS_FLUJO.MENU, {
+      ...LIMPIAR_RESERVA,
+      opciones: FILAS_MENU.map((fila) => fila.id)
+    });
+
+    return [texto(MENSAJE_SIN_CITAS)];
+  }
+
+  const filas = filasCitas(citas);
+  const estado =
+    tipo === 'cancelacion' ? ESTADOS_FLUJO.CANCELAR_CITA : ESTADOS_FLUJO.REPROGRAMAR_CITA;
+
+  await guardar(conversacion, estado, {
+    ...LIMPIAR_RESERVA,
+    modo: tipo,
+    citasOfrecidas: citas.map((cita) => cita.id),
+    opciones: filas.map((fila) => fila.id)
+  });
+
+  const cuerpo = [
+    encabezado,
+    tipo === 'cancelacion'
+      ? '¿Cuál cita quieres cancelar?\n\nLa cita sigue activa hasta que recepción confirme la cancelación.'
+      : '¿Cuál cita quieres reprogramar?\n\nDespués eliges la nueva fecha y hora.'
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+
+  return [lista(cuerpo, filas, { etiqueta: 'Ver citas', seccion: 'Tus citas' })];
+};
+
+const iniciarCancelacion = (conversacion) =>
+  iniciarGestionCita(conversacion, { tipo: 'cancelacion' });
+
+const iniciarReprogramacion = (conversacion) =>
+  iniciarGestionCita(conversacion, { tipo: 'reprogramacion' });
+
+const citaElegida = (contexto, entrada, seleccion) => {
+  const id = idDe(seleccion, 'cita');
+
+  if (id && /^\d+$/.test(id)) return Number(id);
+
+  const porNumero = opcionPorNumero(contexto, entrada);
+
+  if (porNumero && porNumero.startsWith('cita:')) {
+    return Number(porNumero.slice('cita:'.length));
+  }
+
+  return null;
+};
+
+const manejarCitaGestion = async (conversacion, paciente, entrada, seleccion) => {
+  const contexto = leerContexto(conversacion);
+  const tipo =
+    conversacion.estadoFlujo === ESTADOS_FLUJO.CANCELAR_CITA
+      ? 'cancelacion'
+      : 'reprogramacion';
+  const citaId = citaElegida(contexto, entrada, seleccion);
+
+  if (!citaId) {
+    return iniciarGestionCita(conversacion, {
+      tipo,
+      encabezado: 'No entendí esa opción.'
+    });
+  }
+
+  const ofrecidas = Array.isArray(contexto.citasOfrecidas)
+    ? contexto.citasOfrecidas.map(Number)
+    : [];
+
+  if (ofrecidas.length && !ofrecidas.includes(citaId)) {
+    return iniciarGestionCita(conversacion, {
+      tipo,
+      encabezado: 'Esa cita no estaba en la lista. Elige una de las opciones.'
+    });
+  }
+
+  const cita = await solicitudWhatsappService.obtenerCitaFutura(
+    conversacion.pacienteId,
+    citaId
+  );
+
+  if (!cita) {
+    return volverAlMenu(conversacion, MENSAJE_CITA_NO_DISPONIBLE);
+  }
+
+  const abierta = await solicitudWhatsappService.buscarSolicitudAbierta(cita.id);
+
+  if (abierta) {
+    return volverAlMenu(conversacion, MENSAJE_SOLICITUD_ABIERTA);
+  }
+
+  if (tipo === 'cancelacion') {
+    const resultado = await solicitudWhatsappService.crearSolicitudCita({
+      conversacion,
+      paciente,
+      citaId: cita.id,
+      tipo
+    });
+
+    if (resultado.estado === 'duplicada') {
+      return volverAlMenu(conversacion, MENSAJE_SOLICITUD_ABIERTA);
+    }
+
+    if (resultado.estado !== 'ok') {
+      return volverAlMenu(conversacion, MENSAJE_CITA_NO_DISPONIBLE);
+    }
+
+    return volverAlMenu(conversacion, MENSAJE_CANCELACION_PENDIENTE);
+  }
+
+  await guardar(conversacion, ESTADOS_FLUJO.REPROGRAMAR_FECHA, {
+    ...LIMPIAR_RESERVA,
+    modo: 'reprogramacion',
+    citaId: cita.id,
+    citaOriginal: { fecha: cita.fecha, hora: cita.hora },
+    servicioId: cita.servicioId ?? cita.servicio?.id ?? null,
+    servicioNombre: cita.servicio?.nombre ?? 'tu servicio',
+    duracionMinutos: Number(cita.servicio?.duracionMinutos) || DURACION_POR_DEFECTO,
+    profesionalId: cita.profesionalId ?? null,
+    profesionalNombre: 'tu profesional'
+  });
+
+  return construirPasoFecha(conversacion, {
+    encabezado: `Vas a reprogramar la cita #${cita.id} del ${formatearFecha(cita.fecha)} a las ${String(cita.hora ?? '').slice(0, 5)}.`
+  });
+};
+
+const manejarReprogramarFecha = async (conversacion, entrada, seleccion) => {
+  const contexto = leerContexto(conversacion);
+
+  if (esProximosDias(entrada)) {
+    return mostrarProximosDias(conversacion, {
+      desde: fechaHoyBogota(),
+      encabezado: 'Estos son los próximos días con cupo.'
+    });
+  }
+
+  const fecha = parsearFechaEntrada(entrada, seleccion);
+
+  if (!fecha) {
+    return construirPasoFecha(conversacion, { encabezado: 'No entendí la fecha.' });
+  }
+
+  const hoy = fechaHoyBogota();
+
+  if (fecha < hoy) {
+    return construirPasoFecha(conversacion, { encabezado: 'Esa fecha ya pasó.' });
+  }
+
+  if (fecha > sumarDias(hoy, DIAS_LIMITE)) {
+    return construirPasoFecha(conversacion, {
+      encabezado: `Solo agendamos hasta el ${formatearFecha(sumarDias(hoy, DIAS_LIMITE))}.`
+    });
+  }
+
+  const { franjas } = await calcularFranjasDelDia({
+    fecha,
+    duracionMinutos: contexto.duracionMinutos,
+    profesionalId: contexto.profesionalId,
+    pacienteId: conversacion.pacienteId,
+    excluirCitaId: contexto.citaId
+  });
+
+  if (!franjas.length) {
+    await guardar(conversacion, ESTADOS_FLUJO.REPROGRAMAR_FECHA, {
+      fecha: null,
+      hora: null
+    });
+
+    return mostrarProximosDias(conversacion, {
+      desde: sumarDias(fecha, 1),
+      encabezado: `No hay cupos para el ${formatearFecha(fecha)}.`
+    });
+  }
+
+  await guardar(conversacion, ESTADOS_FLUJO.REPROGRAMAR_HORA, { fecha, hora: null });
+
+  return construirPasoHora(conversacion, {
+    estadoHora: ESTADOS_FLUJO.REPROGRAMAR_HORA,
+    estadoFecha: ESTADOS_FLUJO.REPROGRAMAR_FECHA
+  });
+};
+
+const manejarReprogramarHora = async (conversacion, paciente, entrada, seleccion) => {
+  const contexto = leerContexto(conversacion);
+  const id = idDe(seleccion, 'hora');
+
+  if (id === 'otro' || esProximosDias(entrada)) {
+    await guardar(conversacion, ESTADOS_FLUJO.REPROGRAMAR_FECHA, {
+      fecha: null,
+      hora: null
+    });
+
+    return construirPasoFecha(conversacion, { encabezado: 'Elige otro día.' });
+  }
+
+  const horaSeleccionada = id ?? (entrada.match(/^(\d{1,2}):(\d{2})$/)
+    ? `${entrada.split(':')[0].padStart(2, '0')}:${entrada.split(':')[1]}`
+    : null);
+  const hora = horaSeleccionada && /^\d{2}:\d{2}$/.test(horaSeleccionada) ? horaSeleccionada : null;
+  const opcionesHora = {
+    estadoHora: ESTADOS_FLUJO.REPROGRAMAR_HORA,
+    estadoFecha: ESTADOS_FLUJO.REPROGRAMAR_FECHA
+  };
+
+  if (!hora) {
+    return construirPasoHora(conversacion, {
+      ...opcionesHora,
+      encabezado: 'No entendí esa opción.'
+    });
+  }
+
+  const ofertadas = Array.isArray(contexto.franjasOfertadas) ? contexto.franjasOfertadas : [];
+  const franja = ofertadas.find((item) => item.hora === hora);
+
+  if (!franja) {
+    return construirPasoHora(conversacion, {
+      ...opcionesHora,
+      encabezado: 'Ese cupo ya no está disponible. Elige otro:'
+    });
+  }
+
+  const resultado = await solicitudWhatsappService.crearSolicitudCita({
+    conversacion,
+    paciente,
+    citaId: contexto.citaId,
+    tipo: 'reprogramacion',
+    fechaPropuesta: contexto.fecha,
+    horaPropuesta: hora
+  });
+
+  if (resultado.estado === 'duplicada') {
+    return volverAlMenu(conversacion, MENSAJE_SOLICITUD_ABIERTA);
+  }
+
+  if (resultado.estado !== 'ok') {
+    return volverAlMenu(conversacion, MENSAJE_CITA_NO_DISPONIBLE);
+  }
+
+  return volverAlMenu(
+    conversacion,
+    `${MENSAJE_REPROGRAMACION_PENDIENTE}\n\nPropuesta: ${formatearFecha(contexto.fecha)} a las ${hora}.`
+  );
+};
+
+const manejarMenu = async (conversacion, paciente, entrada, seleccion, mensaje) => {
   const contexto = leerContexto(conversacion);
   const id = idDe(seleccion, 'menu');
   const porNumero = opcionPorNumero(contexto, entrada);
@@ -551,21 +868,26 @@ const manejarMenu = async (conversacion, entrada, seleccion) => {
     case 'solicitar':
       return iniciarServicio(conversacion, 'reserva');
     case 'cancelar':
-      return derivarHumano(conversacion, {
-        encabezado:
-          'Para cancelar una cita prefiero que lo gestione recepción, así liberamos el cupo correctamente.'
-      });
+      return iniciarCancelacion(conversacion);
     case 'reprogramar':
-      return derivarHumano(conversacion, {
-        encabezado:
-          'Para reprogramar una cita prefiero que lo gestione recepción, así no se pierde tu cupo actual.'
-      });
+      return iniciarReprogramacion(conversacion);
     case 'humano':
-      return derivarHumano(conversacion);
+      return derivarHumano(conversacion, paciente, {
+        mensaje: mensaje?.contenido
+      });
     default:
-      return mostrarMenu(conversacion, {
-        saludo: false,
-        encabezado: 'No entendí esa opción.'
+      // Una selección o un número fuera de rango es un error de pulsación; el
+      // texto libre desconocido se escala a una persona.
+      if (seleccion || /^\d+$/.test(entrada)) {
+        return mostrarMenu(conversacion, {
+          saludo: false,
+          encabezado: 'No entendí esa opción.'
+        });
+      }
+
+      return derivarHumano(conversacion, paciente, {
+        encabezado: 'Entiendo que necesitas ayuda con otra cosa.',
+        mensaje: mensaje?.contenido
       });
   }
 };
@@ -585,6 +907,7 @@ const resolverMenuPorTexto = (entrada) => {
     agendar: 'solicitar',
     cita: 'solicitar',
     '4': 'cancelar',
+    cancelar: 'cancelar',
     'cancelar cita': 'cancelar',
     '5': 'reprogramar',
     reprogramar: 'reprogramar',
@@ -993,16 +1316,29 @@ const procesar = async ({ conversacion, paciente, mensaje, seleccion = null }) =
   const entrada = normalizar(mensaje?.contenido);
 
   if (conversacion.estadoFlujo === ESTADOS_FLUJO.HUMANO) {
-    return esMenuExplicito(entrada, seleccion)
-      ? mostrarMenu(conversacion, { saludo: false })
-      : [];
+    if (esMenuExplicito(entrada, seleccion)) {
+      return mostrarMenu(conversacion, { saludo: false });
+    }
+
+    // Recepción ya tiene la conversación: los mensajes siguientes se agregan a
+    // la misma solicitud sin enviar respuestas automáticas.
+    await registrarEscalamiento(conversacion, paciente, mensaje?.contenido);
+
+    return [];
   }
 
   const comando = detectarComando(entrada, seleccion);
 
-  if (comando === 'humano') return derivarHumano(conversacion);
+  if (comando === 'humano') {
+    return derivarHumano(conversacion, paciente, { mensaje: mensaje?.contenido });
+  }
 
-  if (comando === 'cancelar') {
+  // En el menú, "cancelar" inicia el flujo de cancelación de una cita. En los
+  // demás pasos sigue funcionando como atajo para abandonar la reserva.
+  const cancelarEnMenu =
+    conversacion.estadoFlujo === ESTADOS_FLUJO.MENU && entrada === 'cancelar';
+
+  if (comando === 'cancelar' && !cancelarEnMenu) {
     const estabaEnMenu = [
       ESTADOS_FLUJO.INICIAL,
       ESTADOS_FLUJO.AVISO_ENVIADO,
@@ -1024,7 +1360,7 @@ const procesar = async ({ conversacion, paciente, mensaje, seleccion = null }) =
     case ESTADOS_FLUJO.INFO_SERVICIOS:
       return mostrarMenu(conversacion, { saludo: false });
     case ESTADOS_FLUJO.MENU:
-      return manejarMenu(conversacion, entrada, seleccion);
+      return manejarMenu(conversacion, paciente, entrada, seleccion, mensaje);
     case ESTADOS_FLUJO.SOLICITAR_SERVICIO:
       return manejarServicio(conversacion, entrada, seleccion);
     case ESTADOS_FLUJO.SOLICITAR_PROFESIONAL:
@@ -1036,6 +1372,13 @@ const procesar = async ({ conversacion, paciente, mensaje, seleccion = null }) =
       return manejarHora(conversacion, entrada, seleccion);
     case ESTADOS_FLUJO.CONFIRMAR:
       return manejarConfirmacion(conversacion, paciente, entrada, seleccion);
+    case ESTADOS_FLUJO.CANCELAR_CITA:
+    case ESTADOS_FLUJO.REPROGRAMAR_CITA:
+      return manejarCitaGestion(conversacion, paciente, entrada, seleccion);
+    case ESTADOS_FLUJO.REPROGRAMAR_FECHA:
+      return manejarReprogramarFecha(conversacion, entrada, seleccion);
+    case ESTADOS_FLUJO.REPROGRAMAR_HORA:
+      return manejarReprogramarHora(conversacion, paciente, entrada, seleccion);
     case ESTADOS_FLUJO.HUMANO:
       return [];
     default:

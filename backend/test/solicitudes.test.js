@@ -2,7 +2,9 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { Op } = require('sequelize');
 const db = require('../src/models');
+const whatsappApi = require('../src/services/whatsappApi');
 const { fechaHoyBogota } = require('../src/utils/tiempo');
+const { MOTIVO_VENTANA_CERRADA } = require('../src/utils/whatsapp');
 const {
   listarSolicitudes,
   obtenerSolicitud,
@@ -428,4 +430,144 @@ test('el listado valida estado, tipo, paciente, fecha y paginación', async () =
       (error) => error.statusCode === 400 && caso.mensaje.test(error.message)
     );
   }
+});
+
+const crearConversacionWhatsapp = (datos = {}) => ({
+  id: 3,
+  telefono: '573001234567',
+  pacienteId: 1,
+  actualizaciones: [],
+  async update(cambios) {
+    this.actualizaciones.push(cambios);
+  },
+  ...datos
+});
+
+const resolverSolicitudWhatsapp = async (t, solicitud, opciones = {}) => {
+  const conversacion = opciones.conversacion ?? crearConversacionWhatsapp();
+  const cita = {
+    id: 10,
+    estado: 'programada',
+    fecha: '2026-11-10',
+    hora: '09:00:00',
+    update: async function actualizar(cambios) {
+      Object.assign(this, cambios);
+    }
+  };
+  const mensajesCreados = [];
+
+  solicitud.cita = { fecha: cita.fecha, hora: cita.hora };
+
+  simularTransaccion(t);
+  simularCatalogos(t);
+  t.mock.method(db.Solicitud, 'findByPk', async () => solicitud);
+  t.mock.method(db.Cita, 'findByPk', async () => cita);
+  t.mock.method(db.Cita, 'findAll', async () => []);
+  t.mock.method(db.Conversacion, 'findByPk', async () =>
+    opciones.conversacion === null ? null : conversacion
+  );
+  t.mock.method(db.Mensaje, 'findOne', async () => ({
+    ocurridoEn: opciones.ultimoEntrante ?? new Date()
+  }));
+  t.mock.method(db.Mensaje, 'create', async (datos) => {
+    mensajesCreados.push(datos);
+    return { id: mensajesCreados.length, ...datos };
+  });
+  const envios = [];
+  t.mock.method(whatsappApi, 'enviarMensaje', async (telefono, contenido) => {
+    envios.push({ telefono, contenido });
+
+    if (opciones.errorEnvio) throw opciones.errorEnvio;
+
+    return { waMessageId: 'wamid-resolucion-1' };
+  });
+  t.mock.method(db.SolicitudHistorial, 'create', async () => ({ id: 1 }));
+
+  await cambiarEstadoSolicitud(
+    solicitud.id,
+    { estado: 'resuelta', comentario: 'Atendida por recepción' },
+    { id: 9 }
+  );
+
+  return { conversacion, cita, mensajesCreados, envios };
+};
+
+test('al resolver avisa al paciente por WhatsApp si la ventana está abierta', async (t) => {
+  const solicitud = crearSolicitud({
+    tipo: 'cancelacion',
+    citaId: 10,
+    origen: 'whatsapp',
+    conversacionId: 3
+  });
+  const { cita, mensajesCreados, envios, conversacion } = await resolverSolicitudWhatsapp(
+    t,
+    solicitud
+  );
+
+  assert.equal(cita.estado, 'cancelada');
+  assert.equal(envios.length, 1);
+  assert.equal(envios[0].telefono, '573001234567');
+  assert.match(envios[0].contenido, /quedó cancelada/);
+  assert.match(envios[0].contenido, /10 de noviembre/);
+  assert.equal(mensajesCreados.length, 1);
+  assert.equal(mensajesCreados[0].direccion, 'saliente');
+  assert.equal(mensajesCreados[0].estado, 'enviado');
+  assert.equal(mensajesCreados[0].conversacionId, 3);
+  assert.equal(conversacion.actualizaciones.length, 1);
+});
+
+test('con la ventana cerrada deja la constancia y no llama a Meta', async (t) => {
+  const solicitud = crearSolicitud({
+    tipo: 'reprogramacion',
+    citaId: 10,
+    origen: 'whatsapp',
+    conversacionId: 3,
+    fechaPropuesta: '2026-11-12',
+    horaPropuesta: '11:00'
+  });
+  const { mensajesCreados, envios } = await resolverSolicitudWhatsapp(t, solicitud, {
+    ultimoEntrante: new Date(Date.now() - 25 * 60 * 60 * 1000)
+  });
+
+  assert.equal(envios.length, 0);
+  assert.equal(mensajesCreados.length, 1);
+  assert.equal(mensajesCreados[0].estado, 'fallido');
+  assert.equal(mensajesCreados[0].motivoFallo, MOTIVO_VENTANA_CERRADA);
+  assert.equal(mensajesCreados[0].requierePlantilla, true);
+  assert.equal(solicitud.estado, 'resuelta');
+});
+
+test('un fallo al enviar el aviso no revierte la resolución', async (t) => {
+  const solicitud = crearSolicitud({
+    tipo: 'cancelacion',
+    citaId: 10,
+    origen: 'whatsapp',
+    conversacionId: 3
+  });
+  const error = Object.assign(new Error('La API de WhatsApp respondió 500'), { status: 500 });
+  const { cita, mensajesCreados } = await resolverSolicitudWhatsapp(t, solicitud, {
+    errorEnvio: error
+  });
+
+  assert.equal(solicitud.estado, 'resuelta');
+  assert.equal(cita.estado, 'cancelada');
+  assert.equal(mensajesCreados.length, 1);
+  assert.equal(mensajesCreados[0].estado, 'fallido');
+  assert.match(mensajesCreados[0].motivoFallo, /respondió 500/);
+});
+
+test('sin conversación asociada resuelve y no intenta enviar', async (t) => {
+  const solicitud = crearSolicitud({
+    tipo: 'cancelacion',
+    citaId: 10,
+    origen: 'whatsapp',
+    conversacionId: 3
+  });
+  const { mensajesCreados, envios } = await resolverSolicitudWhatsapp(t, solicitud, {
+    conversacion: null
+  });
+
+  assert.equal(solicitud.estado, 'resuelta');
+  assert.equal(envios.length, 0);
+  assert.equal(mensajesCreados.length, 0);
 });

@@ -7,6 +7,9 @@ const { DURACION_POR_DEFECTO, ESTADOS_SIN_OCUPAR } = require('../utils/agenda');
 const { validarHorarioCita } = require('./agendaService');
 const { buscarCruce } = require('./citaService');
 const { obtenerDisponibilidad } = require('./disponibilidadService');
+const whatsappSalientes = require('./whatsappSalientes');
+const { registrar, registrarError } = require('../utils/registroWhatsapp');
+const { formatearFecha } = require('../utils/whatsappInteractivo');
 
 const ESTADOS = ['pendiente', 'en_atencion', 'resuelta'];
 const TIPOS = ['cancelacion', 'reprogramacion', 'consulta', 'otra'];
@@ -311,6 +314,88 @@ const aplicarEfectos = async (solicitud, transaccion) => {
   await reprogramarCita(solicitud, cita, transaccion);
 };
 
+const horaCorta = (hora) => (typeof hora === 'string' ? hora.slice(0, 5) : '');
+
+const mensajeResolucion = (solicitud) => {
+  const cita = solicitud.cita;
+
+  if (solicitud.tipo === 'cancelacion') {
+    if (cita?.fecha) {
+      return `✅ Tu cita del ${formatearFecha(cita.fecha)} a las ${horaCorta(cita.hora)} quedó cancelada. El horario ya está libre. Si necesitas otra cita, escríbenos por aquí.`;
+    }
+
+    return '✅ Tu solicitud de cancelación fue atendida. Si necesitas otra cita, escríbenos por aquí.';
+  }
+
+  if (solicitud.tipo === 'reprogramacion') {
+    const fecha = solicitud.fechaPropuesta || cita?.fecha;
+    const hora = solicitud.horaPropuesta || cita?.hora;
+
+    if (fecha) {
+      return `✅ Tu cita quedó reprogramada para el ${formatearFecha(fecha)} a las ${horaCorta(hora)}. Te esperamos.`;
+    }
+
+    return '✅ Tu solicitud de reprogramación fue atendida.';
+  }
+
+  return '✅ Tu solicitud fue atendida. Gracias por escribirnos.';
+};
+
+const conversacionDeSolicitud = async (solicitud) => {
+  if (solicitud.conversacionId) {
+    return db.Conversacion.findByPk(solicitud.conversacionId);
+  }
+
+  if (!solicitud.pacienteId) return null;
+
+  return db.Conversacion.findOne({
+    where: { pacienteId: solicitud.pacienteId },
+    order: [['ultimaActividad', 'DESC'], ['id', 'DESC']]
+  });
+};
+
+/**
+ * Avisa al paciente que su solicitud fue resuelta. Solo aplica a solicitudes
+ * originadas en WhatsApp. Si la ventana de 24 h está cerrada, el saliente queda
+ * registrado como fallido y marcado para enviarse con plantilla. Un fallo del
+ * aviso nunca revierte la resolución.
+ */
+const notificarResolucion = async (solicitud) => {
+  try {
+    if (!solicitud || (solicitud.origen !== 'whatsapp' && !solicitud.conversacionId)) {
+      return null;
+    }
+
+    const conversacion = await conversacionDeSolicitud(solicitud);
+
+    if (!conversacion) {
+      registrar('resolucion_sin_conversacion', { solicitudId: solicitud.id });
+      return null;
+    }
+
+    const contenido = mensajeResolucion(solicitud);
+    const mensaje = await whatsappSalientes.enviarYGuardar({
+      conversacion,
+      contenido,
+      textoPlano: contenido
+    });
+
+    registrar('resolucion_notificada', {
+      solicitudId: solicitud.id,
+      mensajeId: mensaje?.id,
+      estado: mensaje?.estado
+    });
+
+    return mensaje;
+  } catch (error) {
+    registrarError('resolucion_notificacion', error, {
+      solicitudId: solicitud?.id
+    });
+
+    return null;
+  }
+};
+
 const cambiarEstadoSolicitud = async (id, datos, usuario) => {
   const solicitudId = parsearEnteroPositivo(id, 'id', { obligatorio: true });
 
@@ -376,13 +461,19 @@ const cambiarEstadoSolicitud = async (id, datos, usuario) => {
     );
   });
 
-  return obtenerSolicitud(solicitudId);
+  const solicitud = await obtenerSolicitud(solicitudId);
+
+  if (estadoNuevo === 'resuelta') {
+    await notificarResolucion(solicitud);
+  }
+
+  return solicitud;
 };
 
 module.exports = {
   ESTADOS,
   TIPOS,
+  cambiarEstadoSolicitud,
   listarSolicitudes,
-  obtenerSolicitud,
-  cambiarEstadoSolicitud
+  obtenerSolicitud
 };

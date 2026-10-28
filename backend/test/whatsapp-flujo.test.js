@@ -2,11 +2,20 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const { Op } = require('sequelize');
 const db = require('../src/models');
 const citaService = require('../src/services/citaService');
+const solicitudWhatsappService = require('../src/services/solicitudWhatsappService');
 const whatsappFlujo = require('../src/services/whatsappFlujo');
 const { fechaHoyBogota, esFechaValida } = require('../src/utils/tiempo');
-const { MENSAJE_HUMANO, parsearContextoJson } = require('../src/utils/whatsapp');
+const {
+  MENSAJE_CANCELACION_PENDIENTE,
+  MENSAJE_CITA_NO_DISPONIBLE,
+  MENSAJE_HUMANO,
+  MENSAJE_SIN_CITAS,
+  MENSAJE_SOLICITUD_ABIERTA,
+  parsearContextoJson
+} = require('../src/utils/whatsapp');
 
 const PACIENTE = { id: 5, nombre: 'Ana', apellido: 'Pérez' };
 
@@ -75,6 +84,12 @@ const crearCatalogo = (t, opciones = {}) => {
     cerrados: opciones.cerrados ?? [],
     citas: opciones.citas ?? [],
     llamadasCrearCita: [],
+    solicitudes: {
+      citas: opciones.citas ?? [],
+      abierta: opciones.solicitudAbierta ?? null,
+      escalamientos: [],
+      creadas: []
+    },
     crearCita:
       opciones.crearCita ??
       (async (datos) => ({
@@ -97,9 +112,43 @@ const crearCatalogo = (t, opciones = {}) => {
 
     return estado.horarios;
   });
-  t.mock.method(db.Cita, 'findAll', async ({ where } = {}) =>
-    where?.fecha ? estado.citas.filter((cita) => cita.fecha === where.fecha) : estado.citas
+  t.mock.method(db.Cita, 'findAll', async ({ where } = {}) => {
+    let citas = where?.fecha
+      ? estado.citas.filter((cita) => cita.fecha === where.fecha)
+      : [...estado.citas];
+    const excluirId = where?.id?.[Op.ne];
+
+    if (excluirId !== undefined) {
+      citas = citas.filter((cita) => Number(cita.id) !== Number(excluirId));
+    }
+
+    return citas;
+  });
+  t.mock.method(solicitudWhatsappService, 'listarCitasFuturas', async () =>
+    estado.solicitudes.citas
   );
+  t.mock.method(solicitudWhatsappService, 'obtenerCitaFutura', async (pacienteId, citaId) =>
+    estado.solicitudes.citas.find((cita) => Number(cita.id) === Number(citaId)) ?? null
+  );
+  t.mock.method(solicitudWhatsappService, 'buscarSolicitudAbierta', async () =>
+    estado.solicitudes.abierta
+  );
+  t.mock.method(solicitudWhatsappService, 'crearSolicitudCita', async (datos) => {
+    estado.solicitudes.creadas.push(datos);
+
+    return {
+      estado: 'ok',
+      solicitud: { id: 100 + estado.solicitudes.creadas.length, ...datos }
+    };
+  });
+  t.mock.method(solicitudWhatsappService, 'registrarEscalamiento', async (datos) => {
+    estado.solicitudes.escalamientos.push(datos);
+
+    return {
+      estado: 'creada',
+      solicitud: { id: 200 + estado.solicitudes.escalamientos.length, ...datos }
+    };
+  });
   t.mock.method(citaService, 'crearCita', async (datos) => {
     estado.llamadasCrearCita.push(datos);
 
@@ -307,7 +356,7 @@ test('transcripción: disponibilidad muestra hasta 8 franjas y vuelve al menú',
 });
 
 test('transcripción: una opción inválida repite el paso sin perder el estado', async (t) => {
-  crearCatalogo(t);
+  const catalogo = crearCatalogo(t);
 
   const servicioConversacion = crearConversacion({
     estadoFlujo: 'solicitar_servicio',
@@ -322,7 +371,18 @@ test('transcripción: una opción inválida repite el paso sin perder el estado'
   const menuConversacion = crearConversacion({ estadoFlujo: 'menu' });
   salidas = await enviar(menuConversacion, 'xyz');
 
-  assert.equal(menuConversacion.estadoFlujo, 'menu');
+  // El texto libre que no coincide con el menú se escala a una persona.
+  assert.equal(menuConversacion.estadoFlujo, 'humano');
+  assert.match(salidas[0].textoPlano, /recepción/);
+  assert.equal(catalogo.solicitudes.escalamientos.length, 1);
+
+  const seleccionInvalida = crearConversacion({
+    estadoFlujo: 'menu',
+    contexto: { opciones: ['menu:solicitar'] }
+  });
+  salidas = await enviar(seleccionInvalida, null, { id: 'menu:desconocido' });
+
+  assert.equal(seleccionInvalida.estadoFlujo, 'menu');
   assert.match(salidas[0].textoPlano, /No entendí esa opción/);
   assert.equal(filasDe(salidas[0]).length, 6);
 
@@ -472,6 +532,125 @@ test('transcripción: servicios y horarios muestra catálogo, duración, precio 
   assert.match(salidas[0].textoPlano, /45 min/);
   assert.match(salidas[0].textoPlano, /Horario de atención/);
   assert.match(salidas[0].textoPlano, /Lunes: 08:00 a 12:00, 14:00 a 18:00/);
+});
+
+const citaFutura = (datos = {}) => {
+  const fecha = datos.fecha ?? sumarDias(fechaHoyBogota(), 3);
+
+  return {
+    id: 40,
+    pacienteId: PACIENTE.id,
+    fecha,
+    hora: '08:00:00',
+    estado: 'confirmada',
+    servicioId: 1,
+    profesionalId: 7,
+    servicio: { id: 1, nombre: 'Limpieza dental', duracionMinutos: 30 },
+    ...datos
+  };
+};
+
+test('transcripción: cancelar crea una solicitud y deja la cita activa', async (t) => {
+  const cita = citaFutura();
+  const catalogo = crearCatalogo(t, { citas: [cita] });
+  const conversacion = crearConversacion({ estadoFlujo: 'menu' });
+
+  let salidas = await enviar(conversacion, null, { id: 'menu:cancelar' });
+
+  assert.equal(conversacion.estadoFlujo, 'cancelar_cita');
+  assert.deepEqual(
+    filasDe(salidas[0]).map((fila) => fila.id),
+    ['cita:40']
+  );
+  assert.match(filasDe(salidas[0])[0].title, /08:00/);
+
+  salidas = await enviar(conversacion, null, { id: 'cita:40' });
+
+  assert.equal(conversacion.estadoFlujo, 'menu');
+  assert.equal(salidas[0].textoPlano, MENSAJE_CANCELACION_PENDIENTE);
+  assert.equal(catalogo.solicitudes.creadas.length, 1);
+  assert.equal(catalogo.solicitudes.creadas[0].tipo, 'cancelacion');
+  assert.equal(catalogo.solicitudes.creadas[0].citaId, 40);
+  // La cita no se toca hasta que recepción resuelva la solicitud.
+  assert.equal(cita.estado, 'confirmada');
+});
+
+test('transcripción: reprogramar excluye la cita propia al ofrecer cupos', async (t) => {
+  const fecha = sumarDias(fechaHoyBogota(), 3);
+  const cita = citaFutura({ id: 41, fecha, hora: '08:00:00' });
+  const catalogo = crearCatalogo(t, { citas: [cita] });
+  const conversacion = crearConversacion({ estadoFlujo: 'menu' });
+
+  let salidas = await enviar(conversacion, null, { id: 'menu:reprogramar' });
+
+  assert.equal(conversacion.estadoFlujo, 'reprogramar_cita');
+  assert.equal(filasDe(salidas[0])[0].id, 'cita:41');
+
+  salidas = await enviar(conversacion, null, { id: 'cita:41' });
+
+  assert.equal(conversacion.estadoFlujo, 'reprogramar_fecha');
+  assert.equal(conversacion.contexto.citaId, 41);
+  assert.equal(conversacion.contexto.duracionMinutos, 30);
+
+  salidas = await enviar(conversacion, null, { id: `fecha:${fecha}` });
+
+  assert.equal(conversacion.estadoFlujo, 'reprogramar_hora');
+
+  // La propia cita no debe bloquear su franja actual.
+  assert.ok(
+    filasDe(salidas[0]).some((fila) => fila.id === 'hora:08:00'),
+    'debe ofrecer la franja que hoy ocupa la cita'
+  );
+
+  salidas = await enviar(conversacion, null, { id: 'hora:08:00' });
+
+  assert.equal(conversacion.estadoFlujo, 'menu');
+  assert.match(salidas[0].textoPlano, /^📝/);
+  assert.equal(catalogo.solicitudes.creadas.length, 1);
+  assert.equal(catalogo.solicitudes.creadas[0].tipo, 'reprogramacion');
+  assert.equal(catalogo.solicitudes.creadas[0].citaId, 41);
+  assert.equal(catalogo.solicitudes.creadas[0].fechaPropuesta, fecha);
+  assert.equal(catalogo.solicitudes.creadas[0].horaPropuesta, '08:00');
+  assert.equal(cita.fecha, fecha, 'la cita original no se mueve todavía');
+});
+
+test('transcripción: una segunda gestión no duplica la solicitud abierta', async (t) => {
+  const catalogo = crearCatalogo(t, {
+    citas: [citaFutura()],
+    solicitudAbierta: { id: 9, estado: 'pendiente' }
+  });
+  const conversacion = crearConversacion({ estadoFlujo: 'menu' });
+
+  await enviar(conversacion, null, { id: 'menu:cancelar' });
+  const salidas = await enviar(conversacion, null, { id: 'cita:40' });
+
+  assert.equal(conversacion.estadoFlujo, 'menu');
+  assert.equal(salidas[0].textoPlano, MENSAJE_SOLICITUD_ABIERTA);
+  assert.equal(catalogo.solicitudes.creadas.length, 0);
+});
+
+test('transcripción: una cita inexistente o ya cancelada vuelve al menú', async (t) => {
+  const catalogo = crearCatalogo(t);
+  const conversacion = crearConversacion({
+    estadoFlujo: 'cancelar_cita',
+    contexto: { modo: 'cancelacion', citasOfrecidas: [40], opciones: ['cita:40'] }
+  });
+
+  const salidas = await enviar(conversacion, null, { id: 'cita:40' });
+
+  assert.equal(conversacion.estadoFlujo, 'menu');
+  assert.equal(salidas[0].textoPlano, MENSAJE_CITA_NO_DISPONIBLE);
+  assert.equal(catalogo.solicitudes.creadas.length, 0);
+});
+
+test('transcripción: sin citas futuras no se abre el flujo de cancelación', async (t) => {
+  crearCatalogo(t);
+  const conversacion = crearConversacion({ estadoFlujo: 'menu' });
+
+  const salidas = await enviar(conversacion, null, { id: 'menu:cancelar' });
+
+  assert.equal(conversacion.estadoFlujo, 'menu');
+  assert.equal(salidas[0].textoPlano, MENSAJE_SIN_CITAS);
 });
 
 test('respeta los límites de WhatsApp en listas y botones', async (t) => {
