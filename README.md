@@ -1,5 +1,120 @@
 # DentAssist
-Dental practice management support system
+Sistema de gestión para consultorios odontológicos.
+
+## Objetivo
+Plataforma web exclusiva del **personal de la clínica** (`admin` o `recepcionista`) para gestionar pacientes, agenda, citas y solicitudes. Los pacientes gestionan sus citas, cancelaciones, reprogramaciones y consultas a través del **canal de WhatsApp**.
+
+## Requisitos
+- [Node.js](https://nodejs.org/) LTS (recomendado 22.x)
+- [MySQL](https://www.mysql.com/) 8.x / [MariaDB](https://mariadb.org/) 10.6+
+- [npm](https://www.npmjs.com/)
+- Cuenta en [Meta for Developers](https://developers.facebook.com/) (solo para producción con WhatsApp Cloud API)
+
+## Estructura del proyecto
+```text
+DentAssist/
+├── backend/        # API REST + Canal WhatsApp + Migraciones/Seeders
+├── frontend/       # React + Vite + Tailwind CSS
+├── docs/           # Checklist E2E, colección Postman
+├── render.yaml     # Plantilla para despliegue en Render
+└── README.md
+```
+
+## Instalación local desde cero
+
+### 1) Clonar repositorio
+```bash
+git clone <URL_DEL_REPO>
+cd DentAssist
+```
+
+### 2) Backend
+```bash
+cd backend
+cp .env.example .env
+npm ci
+```
+
+Editar `backend/.env` con tus credenciales de MySQL, JWT y (opcional) WhatsApp.
+
+### 3) Frontend
+```bash
+cd ../frontend
+cp .env.example .env
+npm ci
+```
+
+Asegurar `VITE_API_URL=http://localhost:3000/api` en `frontend/.env`.
+
+## Variables de entorno
+
+### Backend (`backend/.env`)
+Ver `backend/.env.example`. Claves principales:
+| Variable | Requerida | Descripción |
+| --- | --- | --- |
+| `NODE_ENV` | Sí | `development` / `production` |
+| `TZ` | Sí | `America/Bogota` |
+| `PORT` | Sí | Puerto del backend (Render usa 10000) |
+| `DB_HOST/DB_USER/DB_PASSWORD/DB_NAME/DB_PORT` | Sí | Conexión MySQL |
+| `DB_NAME_TEST` | Opcional | BD para tests |
+| `DB_SSL` | Opcional | `true` si el proveedor exige SSL |
+| `JWT_SECRET` | Sí | Clave larga y única |
+| `JWT_EXPIRES_IN` | Sí | `1d` por defecto |
+| `CORS_ORIGINS`/`FRONTEND_URL` | Sí en prod | Orígenes permitidos separados por coma |
+| `SLOT_MINUTOS` | Opcional | `30` por defecto |
+| `WHATSAPP_*` | Opcional | Solo para canal real con Meta |
+| `WHATSAPP_SIMULADOR` | Opcional | `0` en prod, activo por defecto en dev |
+
+### Frontend (`frontend/.env`)
+| Variable | Requerida | Descripción |
+| --- | --- | --- |
+| `VITE_API_URL` | Sí | URL base del backend con `/api` (ej. `http://localhost:3000/api`) |
+
+## Base de datos, migraciones y seeds
+
+Crear base de datos (MySQL):
+```sql
+CREATE DATABASE nodestore CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+Desde `backend/`:
+```bash
+# Ejecutar migraciones
+npm run migrate
+
+# Ejecutar seeders (datos base: usuarios demo, profesionales, servicios, horarios)
+npm run seed:all
+```
+
+Para revertir (si es necesario):
+```bash
+npm run seed:undo:all
+npm run migrate:undo
+```
+
+### Usuarios demo (seeders)
+Los seeders crean datos para desarrollo/pruebas. **No los uses en producción** salvo el admin que realmente necesites. Revisa `backend/src/seeders/` para conocer correos/contrasenas exactos.
+
+## Ejecución en desarrollo
+```bash
+# Terminal 1 - Backend
+cd backend
+npm run dev
+
+# Terminal 2 - Frontend
+cd frontend
+npm run dev
+```
+
+- Backend: `http://localhost:3000` (health: `http://localhost:3000/api/health`)
+- Frontend: `http://localhost:5173`
+
+## Pruebas
+```bash
+cd backend
+npm test
+```
+Suite actual: **118 tests** en verde.
 
 ## API de citas
 

@@ -7,6 +7,10 @@
     "dev": "nodemon server.js",
     "start": "node server.js",
     "test": "node --test",
+    "migrate": "npx sequelize-cli db:migrate",
+    "migrate:undo": "npx sequelize-cli db:migrate:undo",
+    "seed:all": "npx sequelize-cli db:seed:all",
+    "seed:undo:all": "npx sequelize-cli db:seed:undo:all",
     "whatsapp:verificar": "node scripts/verificar-whatsapp.js"
   },
   "keywords": [],

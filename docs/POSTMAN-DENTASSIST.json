@@ -1,0 +1,114 @@
+{
+  "info": {
+    "name": "DentAssist - API",
+    "description": "Colección mínima para pruebas locales y en producción",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000/api" },
+    { "key": "token", "value": "" },
+    { "key": "whatsappUrl", "value": "http://localhost:3000" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correo\": \"admin@dentassist.com\",\n  \"contrasena\": \"Admin1234\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /api/health",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Citas",
+      "item": [
+        {
+          "name": "Listar citas",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/citas", "host": ["{{baseUrl}}"], "path": ["citas"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Solicitudes",
+      "item": [
+        {
+          "name": "Listar solicitudes",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/solicitudes", "host": ["{{baseUrl}}"], "path": ["solicitudes"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "WhatsApp",
+      "item": [
+        {
+          "name": "Simulador - Hola",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{whatsappUrl}}/api/whatsapp/simular", "host": ["{{whatsappUrl}}"], "path": ["api", "whatsapp", "simular"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"telefono\": \"3001234567\",\n  \"texto\": \"Hola\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Simulador - Seleccionar menu:cancelar",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{whatsappUrl}}/api/whatsapp/simular", "host": ["{{whatsappUrl}}"], "path": ["api", "whatsapp", "simular"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"telefono\": \"3001234567\",\n  \"seleccion\": \"menu:cancelar\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Webhook - Verificación (GET)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{whatsappUrl}}/api/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=TU_VERIFY_TOKEN&hub.challenge=12345",
+              "host": ["{{whatsappUrl}}"],
+              "path": ["api", "whatsapp", "webhook"],
+              "query": [
+                { "key": "hub.mode", "value": "subscribe" },
+                { "key": "hub.verify_token", "value": "TU_VERIFY_TOKEN" },
+                { "key": "hub.challenge", "value": "12345" }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
