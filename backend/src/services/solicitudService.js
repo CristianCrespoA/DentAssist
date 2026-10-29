@@ -118,19 +118,21 @@ const obtenerSolicitud = async (id) => {
     plain = JSON.parse(JSON.stringify(solicitud));
   }
 
-  try { if (plain.pacienteId) { const p = await db.Paciente.findByPk(plain.pacienteId); plain.paciente = p ? (p.get ? p.get({ plain: true }) : p) : null; } } catch (e) { console.error('SVC ERR P', e.message); }
-  try { if (plain.servicioId) { const s = await db.Servicio.findByPk(plain.servicioId); plain.servicio = s ? (s.get ? s.get({ plain: true }) : s) : null; } } catch (e) { console.error('SVC ERR S', e.message); }
-  try { if (plain.citaId) { const c = await db.Cita.findByPk(plain.citaId); if (c) { const pc = c.get ? c.get({ plain: true }) : c; try { if (pc.profesionalId && db.Profesional) { const pr = await db.Profesional.findByPk(pc.profesionalId); if (pr) pc.profesional = pr.get ? pr.get({ plain: true }) : pr; } } catch (e2) { console.error('SVC ERR PR', e2.message); } plain.cita = pc; } else plain.cita = null; } } catch (e) { console.error('SVC ERR C', e.message); plain.cita = null; }
-  try { if (plain.conversacionId) { const conv = await db.Conversacion.findByPk(plain.conversacionId); plain.conversacion = conv ? (conv.get ? conv.get({ plain: true }) : conv) : null; if (plain.conversacion && db.Mensaje) { try { const msgs = await db.Mensaje.findAll({ where: { conversacionId: plain.conversacion.id }, order: [['ocurridoEn', 'ASC'], ['createdAt', 'ASC']] }); plain.conversacion.mensajes = msgs.map(m => (m.get ? m.get({ plain: true }) : m)); } catch (e2) { console.error('SVC ERR M', e2.message); plain.conversacion.mensajes = []; } } } } catch (e) { console.error('SVC ERR CONV', e.message); }
+  try { if (plain.pacienteId && db.Paciente) { const p = await db.Paciente.findByPk(plain.pacienteId); plain.paciente = p ? (p.get ? p.get({ plain: true }) : p) : null; } else plain.paciente = null; } catch (e) { console.error('SVC ERR P', e.message); plain.paciente = null; }
+  try { if (plain.servicioId && db.Servicio) { const s = await db.Servicio.findByPk(plain.servicioId); plain.servicio = s ? (s.get ? s.get({ plain: true }) : s) : null; } else plain.servicio = null; } catch (e) { console.error('SVC ERR S', e.message); plain.servicio = null; }
+  try { if (plain.citaId && db.Cita) { const c = await db.Cita.findByPk(plain.citaId); if (c) { const pc = c.get ? c.get({ plain: true }) : c; try { if (pc.profesionalId && db.Profesional) { const pr = await db.Profesional.findByPk(pc.profesionalId); if (pr) pc.profesional = pr.get ? pr.get({ plain: true }) : pr; } } catch (e2) { console.error('SVC ERR PR', e2.message); } plain.cita = pc; } else plain.cita = null; } else plain.cita = null; } catch (e) { console.error('SVC ERR C', e.message); plain.cita = null; }
+  try { if (plain.conversacionId && db.Conversacion) { const conv = await db.Conversacion.findByPk(plain.conversacionId); plain.conversacion = conv ? (conv.get ? conv.get({ plain: true }) : conv) : null; if (plain.conversacion && db.Mensaje) { try { const msgs = await db.Mensaje.findAll({ where: { conversacionId: plain.conversacion.id }, order: [['ocurridoEn', 'ASC'], ['createdAt', 'ASC']] }); plain.conversacion.mensajes = msgs.map(m => (m.get ? m.get({ plain: true }) : m)); } catch (e2) { console.error('SVC ERR M', e2.message); plain.conversacion.mensajes = []; } } else if (plain.conversacion) plain.conversacion.mensajes = []; } else { if (plain.conversacionId) plain.conversacion = null; } } catch (e) { console.error('SVC ERR CONV', e.message); if (plain.conversacionId) plain.conversacion = null; }
   try {
-    const hist = await db.SolicitudHistorial.findAll({ where: { solicitudId: plain.id }, order: [['createdAt', 'ASC']] });
-    plain.historial = [];
-    for (const h of hist) {
-      const ph = h.get ? h.get({ plain: true }) : h;
-      try { if (ph.usuarioId) { const u = await db.Usuario.findByPk(ph.usuarioId, { attributes: ['id', 'nombre', 'apellido', 'email', 'rol'] }); if (u) ph.usuario = u.get ? u.get({ plain: true }) : u; } } catch (e2) { console.error('SVC ERR HU', e2.message); }
-      plain.historial.push(ph);
-    }
-  } catch (e) { console.error('SVC ERR H', e.message); }
+    if (db.SolicitudHistorial) {
+      const hist = await db.SolicitudHistorial.findAll({ where: { solicitudId: plain.id }, order: [['createdAt', 'ASC']] });
+      plain.historial = [];
+      for (const h of hist) {
+        const ph = h.get ? h.get({ plain: true }) : h;
+        try { if (ph.usuarioId && db.Usuario) { const u = await db.Usuario.findByPk(ph.usuarioId, { attributes: ['id', 'nombre', 'apellido', 'email', 'rol'] }); if (u) ph.usuario = u.get ? u.get({ plain: true }) : u; } } catch (e2) { console.error('SVC ERR HU', e2.message); }
+        plain.historial.push(ph);
+      }
+    } else plain.historial = [];
+  } catch (e) { console.error('SVC ERR H', e.message); plain.historial = []; }
 
   return plain;
 };
