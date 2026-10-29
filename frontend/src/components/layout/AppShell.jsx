@@ -207,10 +207,10 @@ function AppShell() {
   }, [pathname]);
 
   return (
-    <div className="min-h-screen bg-neutral-100">
+    <div className="min-h-screen bg-neutral-100 dark:bg-neutral-950">
       <a
         href="#contenido-principal"
-        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[70] focus:rounded-field focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-primary-800 focus:shadow-float"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[70] focus:rounded-field focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-primary-800 focus:shadow-float dark:bg-neutral-900 dark:text-primary-200"
       >
         Saltar al contenido
       </a>
@@ -237,7 +237,7 @@ function AppShell() {
         <div className="fixed inset-0 z-10 flex">
           <DialogPanel
             transition
-            className="flex w-full max-w-xs flex-col bg-white shadow-float transition data-closed:-translate-x-full data-enter:duration-200 data-enter:ease-out data-leave:duration-150 data-leave:ease-in"
+            className="flex w-full max-w-xs flex-col bg-white shadow-float transition data-closed:-translate-x-full data-enter:duration-200 data-enter:ease-out data-leave:duration-150 data-leave:ease-in dark:bg-neutral-900"
           >
             <DialogTitle className="sr-only">Menú de navegación</DialogTitle>
             <SidebarContent
@@ -253,7 +253,7 @@ function AppShell() {
       </Dialog>
 
       <div className="lg:pl-sidebar">
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-neutral-200 bg-white/95 px-4 backdrop-blur lg:hidden">
+        <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-neutral-200 bg-white/95 px-4 backdrop-blur lg:hidden dark:border-neutral-800 dark:bg-neutral-900/95">
           <div className="flex min-w-0 items-center gap-2">
             <Button
               variant="ghost"
@@ -266,21 +266,22 @@ function AppShell() {
               <span className="flex size-8 shrink-0 items-center justify-center rounded-field bg-primary-700 text-white">
                 <Stethoscope className="size-4" aria-hidden="true" />
               </span>
-              <span className="truncate text-sm font-bold tracking-tight text-neutral-900">
+              <span className="truncate text-sm font-bold tracking-tight text-neutral-900 dark:text-neutral-100">
                 DentAssist
               </span>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <div className="hidden min-w-0 text-right sm:block">
-              <p className="truncate text-sm font-semibold text-neutral-900">
+              <p className="truncate text-sm font-semibold text-neutral-900 dark:text-neutral-100">
                 {usuario?.nombre}
               </p>
-              <p className="text-xs text-neutral-500">{etiquetaRol}</p>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400">{etiquetaRol}</p>
             </div>
             <span
-              className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-100 text-xs font-bold text-primary-800 sm:hidden"
+              className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-100 text-xs font-bold text-primary-800 sm:hidden dark:bg-primary-900 dark:text-primary-200"
               aria-hidden="true"
             >
               {iniciales}
