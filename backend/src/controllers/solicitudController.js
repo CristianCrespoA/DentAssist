@@ -27,38 +27,27 @@ const obtener = async (req, res) => {
     }
     let plain;
     try {
-      plain = solicitud.toJSON ? solicitud.toJSON() : solicitud.get ? solicitud.get({ plain: true }) : solicitud;
-    } catch (e) {
       plain = solicitud.get ? solicitud.get({ plain: true }) : solicitud;
+    } catch (e) {
+      plain = JSON.parse(JSON.stringify(solicitud));
     }
 
-    try {
-      plain.paciente = await db.Paciente.findByPk(plain.pacienteId);
-      if (plain.paciente && plain.paciente.toJSON) plain.paciente = plain.paciente.toJSON();
-    } catch (e) { console.error('ERR PACIENTE', e.message); }
-
-    try {
-      plain.servicio = await db.Servicio.findByPk(plain.servicioId);
-      if (plain.servicio && plain.servicio.toJSON) plain.servicio = plain.servicio.toJSON();
-    } catch (e) { console.error('ERR SERVICIO', e.message); }
-
-    try {
-      if (plain.citaId) {
-        plain.cita = await db.Cita.findByPk(plain.citaId);
-        if (plain.cita && plain.cita.toJSON) plain.cita = plain.cita.toJSON();
-      }
-    } catch (e) { console.error('ERR CITA', e.message); }
+    try { plain.paciente = plain.pacienteId ? (await db.Paciente.findByPk(plain.pacienteId))?.get?.({ plain: true }) || null : null; } catch (e) { console.error('ERR PACIENTE', e.message); }
+    try { plain.servicio = plain.servicioId ? (await db.Servicio.findByPk(plain.servicioId))?.get?.({ plain: true }) || null : null; } catch (e) { console.error('ERR SERVICIO', e.message); }
+    try { plain.cita = plain.citaId ? (await db.Cita.findByPk(plain.citaId))?.get?.({ plain: true }) || null : null; } catch (e) { console.error('ERR CITA', e.message); }
 
     try {
       if (plain.conversacionId) {
-        plain.conversacion = await db.Conversacion.findByPk(plain.conversacionId);
-        if (plain.conversacion && plain.conversacion.toJSON) plain.conversacion = plain.conversacion.toJSON();
+        const conv = await db.Conversacion.findByPk(plain.conversacionId);
+        plain.conversacion = conv ? (conv.get ? conv.get({ plain: true }) : conv) : null;
         if (plain.conversacion && db.Mensaje) {
-          const mensajes = await db.Mensaje.findAll({
-            where: { conversacionId: plain.conversacion.id },
-            order: [['ocurridoEn', 'ASC'], ['createdAt', 'ASC']]
-          });
-          plain.conversacion.mensajes = mensajes.map(m => (m.toJSON ? m.toJSON() : m));
+          try {
+            const mensajes = await db.Mensaje.findAll({
+              where: { conversacionId: plain.conversacion.id },
+              order: [['ocurridoEn', 'ASC'], ['createdAt', 'ASC']]
+            });
+            plain.conversacion.mensajes = mensajes.map(m => (m.get ? m.get({ plain: true }) : m));
+          } catch (e2) { console.error('ERR MENSAJES', e2.message); plain.conversacion.mensajes = []; }
         }
       }
     } catch (e) { console.error('ERR CONV', e.message); }
@@ -70,11 +59,11 @@ const obtener = async (req, res) => {
       });
       plain.historial = [];
       for (const h of historial) {
-        const ph = h.toJSON ? h.toJSON() : h;
+        const ph = h.get ? h.get({ plain: true }) : h;
         try {
           if (ph.usuarioId) {
             const u = await db.Usuario.findByPk(ph.usuarioId, { attributes: ['id', 'nombre', 'apellido'] });
-            if (u) ph.usuario = u.toJSON ? u.toJSON() : u;
+            if (u) ph.usuario = u.get ? u.get({ plain: true }) : u;
           }
         } catch (e2) { console.error('ERR HIST USR', e2.message); }
         plain.historial.push(ph);
