@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { UserPlus } from 'lucide-react';
-import api from '../lib/api';
+import { api } from '../services/api';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import Field from '../components/ui/Field';
