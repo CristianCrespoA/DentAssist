@@ -7,7 +7,6 @@ const pacienteRoutes = require('./pacienteRoutes');
 const profesionalRoutes = require('./profesionalRoutes');
 const servicioRoutes = require('./servicioRoutes');
 const solicitudRoutes = require('./solicitudRoutes');
-const authRoutes = require('./authRoutes');
 const whatsappRoutes = require('./whatsappRoutes');
 const whatsappChatRoutes = require('./whatsappChat');
 
@@ -16,7 +15,7 @@ router.get('/', (req, res) => {
 });
 
 router.use('/auth', authRoutes);
-router.use('/usuarios', usuarioRoutes);
+router.use('/usuarios', authRoutes);
 router.use('/pacientes', pacienteRoutes);
 router.use('/citas', citaRoutes);
 router.use('/disponibilidad', disponibilidadRoutes);
