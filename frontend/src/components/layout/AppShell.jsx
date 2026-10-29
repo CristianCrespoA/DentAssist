@@ -19,7 +19,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { cn } from '../../lib/cn';
 import Badge from '../ui/Badge';
 import Button from '../ui/Button';
-import ThemeToggle from '../ui/ThemeToggle';
+
 
 const ETIQUETAS_ROL = {
   admin: 'Administrador',
@@ -167,17 +167,14 @@ function SidebarContent({ usuario, etiquetaRol, iniciales, onLogout, onNavigate,
           </div>
         </div>
 
-        <div className="mt-2 flex items-center justify-between">
-          <ThemeToggle />
-          <Button
-            variant="ghost"
-            onClick={onLogout}
-            leftIcon={<LogOut aria-hidden="true" />}
-            className="justify-start"
-          >
-            Cerrar sesión
-          </Button>
-        </div>
+        <Button
+          variant="ghost"
+          onClick={onLogout}
+          leftIcon={<LogOut aria-hidden="true" />}
+          className="mt-2 w-full justify-start"
+        >
+          Cerrar sesión
+        </Button>
       </div>
     </div>
   );
@@ -273,7 +270,6 @@ function AppShell() {
           </div>
 
           <div className="flex items-center gap-2">
-            <ThemeToggle />
             <div className="hidden min-w-0 text-right sm:block">
               <p className="truncate text-sm font-semibold text-neutral-900 dark:text-neutral-100">
                 {usuario?.nombre}

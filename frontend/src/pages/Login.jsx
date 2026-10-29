@@ -12,7 +12,7 @@ import { api } from '../services/api';
 import Button from '../components/ui/Button';
 import Field from '../components/ui/Field';
 import Input from '../components/ui/Input';
-import ThemeToggle from '../components/ui/ThemeToggle';
+
 
 const BENEFICIOS = [
   'Agenda de citas y disponibilidad en tiempo real.',
@@ -58,10 +58,7 @@ const Login = () => {
   };
 
   return (
-    <div className="relative min-h-screen bg-neutral-100 lg:grid lg:grid-cols-2 dark:bg-neutral-950">
-      <div className="absolute right-4 top-4 z-10">
-        <ThemeToggle />
-      </div>
+    <div className="min-h-screen bg-neutral-100 lg:grid lg:grid-cols-2">
       <aside className="relative hidden overflow-hidden bg-gradient-to-br from-primary-800 via-primary-900 to-neutral-950 p-12 text-white lg:flex lg:min-h-screen lg:flex-col lg:justify-between">
         <div
           className="pointer-events-none absolute -right-24 -top-24 size-80 rounded-full bg-primary-500/20 blur-3xl"

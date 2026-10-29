@@ -19,11 +19,11 @@ export default function Usuarios() {
     setCargandoLista(true);
     try {
       const data = await api.get('/auth/usuarios');
-      setUsuarios(Array.isArray(data) ? data : data?.usuarios || []);
+      setUsuarios(Array.isArray(data) ? data : data?.usuarios || data?.data || []);
     } catch {
       try {
         const data = await api.get('/usuarios');
-        setUsuarios(Array.isArray(data) ? data : data?.usuarios || []);
+        setUsuarios(Array.isArray(data) ? data : data?.usuarios || data?.data || []);
       } catch {
         setUsuarios([]);
       }
