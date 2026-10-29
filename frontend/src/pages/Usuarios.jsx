@@ -25,12 +25,18 @@ export default function Usuarios() {
   const cargarUsuarios = async () => {
     setCargandoLista(true);
     try {
-      const data = await api.get('/auth/usuarios');
+      const data = await api.get(`/auth/usuarios?_=${Date.now()}`);
       const lista = Array.isArray(data) ? data : data?.usuarios || data?.data || data?.rows || [];
       setUsuarios(lista);
     } catch (e) {
       console.error(e);
-      setUsuarios([]);
+      try {
+        const data2 = await api.get(`/usuarios?_=${Date.now()}`);
+        const lista2 = Array.isArray(data2) ? data2 : data2?.usuarios || data2?.data || data2?.rows || [];
+        setUsuarios(lista2);
+      } catch {
+        setUsuarios([]);
+      }
     } finally {
       setCargandoLista(false);
     }
