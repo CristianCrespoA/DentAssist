@@ -6,7 +6,7 @@ import Input from '../components/ui/Input';
 import Field from '../components/ui/Field';
 import Card from '../components/ui/Card';
 
-export default function Usuarios() {
+function Usuarios() {
   const [form, setForm] = useState({ nombre: '', apellido: '', correo: '', contrasena: '' });
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState(null);
@@ -60,3 +60,5 @@ export default function Usuarios() {
     </div>
   );
 }
+
+export default Usuarios;
