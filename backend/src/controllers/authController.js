@@ -42,10 +42,26 @@ const perfil = async (req, res) => {
 const listarUsuarios = async (req, res) => {
   try {
     const usuarios = await Usuario.findAll({
-      attributes: ['id', 'nombre', 'apellido', 'correo', 'email', 'rol', 'activo'],
+      attributes: ['id', 'nombre', 'email', 'rol'],
       order: [['id', 'ASC']]
     });
-    return res.status(200).json(usuarios);
+    const resultado = usuarios.map((u) => {
+      const plain = u.get ? u.get({ plain: true }) : u;
+      const nombreCompleto = plain.nombre || '';
+      const partes = nombreCompleto.trim().split(/\s+/);
+      const nombre = partes.shift() || nombreCompleto;
+      const apellido = partes.join(' ');
+      return {
+        id: plain.id,
+        nombre,
+        apellido,
+        correo: plain.email || plain.correo,
+        email: plain.email || plain.correo,
+        rol: plain.rol,
+        activo: true
+      };
+    });
+    return res.status(200).json(resultado);
   } catch (error) {
     return manejarError(res, error, 500);
   }
