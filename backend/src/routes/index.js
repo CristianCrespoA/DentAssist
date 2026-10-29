@@ -9,12 +9,16 @@ const servicioRoutes = require('./servicioRoutes');
 const solicitudRoutes = require('./solicitudRoutes');
 const whatsappRoutes = require('./whatsappRoutes');
 const whatsappChatRoutes = require('./whatsappChat');
+const authController = require('./controllers/authController');
+const { authMiddleware, roleMiddleware } = require('./middlewares/authMiddleware');
 
 router.get('/', (req, res) => {
   res.json({ message: 'API routes' });
 });
 
 router.use('/auth', authRoutes);
+router.get('/usuarios', authMiddleware, roleMiddleware(['admin']), authController.listarUsuarios);
+router.post('/usuarios', authMiddleware, roleMiddleware(['admin']), authController.register);
 router.use('/usuarios', authRoutes);
 router.use('/pacientes', pacienteRoutes);
 router.use('/citas', citaRoutes);
