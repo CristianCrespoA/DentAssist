@@ -182,67 +182,37 @@ export default function Usuarios() {
             <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Lista de usuarios ({usuarios.length})</h2>
             <p className="text-sm text-neutral-500 dark:text-neutral-400">Usuarios registrados en el sistema</p>
           </div>
-          <div className="overflow-x-auto">
-            <Table>
-              <Table.Header>
-                <Table.Row>
-                  <Table.Head>Nombre</Table.Head>
-                  <Table.Head>Correo</Table.Head>
-                  <Table.Head>Rol</Table.Head>
-                  <Table.Head>Estado</Table.Head>
-                  <Table.Head className="text-right">Acciones</Table.Head>
-                </Table.Row>
-              </Table.Header>
-              <Table.Body>
-                {cargandoLista ? (
-                  <Table.Row>
-                    <Table.Cell colSpan={5} className="text-center text-neutral-500 dark:text-neutral-400">
-                      Cargando...
-                    </Table.Cell>
-                  </Table.Row>
-                ) : usuarios.length === 0 ? (
-                  <Table.Row>
-                    <Table.Cell colSpan={5} className="text-center text-neutral-500 dark:text-neutral-400">
-                      No hay usuarios registrados
-                    </Table.Cell>
-                  </Table.Row>
-                ) : (
-                  usuarios.map((u) => (
-                    <Table.Row key={u.id}>
-                      <Table.Cell className="font-medium text-neutral-900 dark:text-neutral-100">
-                        {u.nombre} {u.apellido}
-                      </Table.Cell>
-                      <Table.Cell className="text-neutral-600 dark:text-neutral-300">{u.correo || u.email}</Table.Cell>
-                      <Table.Cell>
-                        <Badge variant={u.rol === 'admin' ? 'primary' : 'neutral'} size="sm">
-                          {u.rol === 'admin' ? 'Administrador' : u.rol === 'recepcionista' ? 'Recepcionista' : u.rol}
-                        </Badge>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Badge variant={u.activo !== false ? 'success' : 'neutral'} size="sm">
-                          {u.activo !== false ? 'Activo' : 'Inactivo'}
-                        </Badge>
-                      </Table.Cell>
-                      <Table.Cell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button size="icon" variant="ghost" onClick={() => abrirEditar(u)} title="Editar">
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button size="icon" variant="ghost" onClick={() => abrirPassword(u)} title="Cambiar contraseña">
-                            <KeyRound className="h-4 w-4" />
-                          </Button>
-                          {u.rol !== 'admin' && (
-                            <Button size="icon" variant="ghost" onClick={() => eliminarUsuario(u)} title="Eliminar">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </Table.Cell>
-                    </Table.Row>
-                  ))
-                )}
-              </Table.Body>
-            </Table>
+          <div className="p-4">
+            {cargandoLista ? (
+              <p className="text-center text-neutral-500 dark:text-neutral-400">Cargando...</p>
+            ) : usuarios.length === 0 ? (
+              <p className="text-center text-neutral-500 dark:text-neutral-400">No hay usuarios registrados</p>
+            ) : (
+              <div className="space-y-2">
+                {usuarios.map((u) => (
+                  <div key={u.id} className="flex items-center justify-between rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
+                    <div>
+                      <p className="font-medium text-neutral-900 dark:text-neutral-100">{u.nombre} {u.apellido}</p>
+                      <p className="text-sm text-neutral-500 dark:text-neutral-400">{u.correo || u.email}</p>
+                      <p className="text-xs text-neutral-400">{u.rol}</p>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button size="icon" variant="ghost" onClick={() => abrirEditar(u)} title="Editar">
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button size="icon" variant="ghost" onClick={() => abrirPassword(u)} title="Cambiar contraseña">
+                        <KeyRound className="h-4 w-4" />
+                      </Button>
+                      {u.rol !== 'admin' && (
+                        <Button size="icon" variant="ghost" onClick={() => eliminarUsuario(u)} title="Eliminar">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </Card>
       </div>
