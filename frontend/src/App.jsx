@@ -9,7 +9,7 @@ import Agenda from './pages/Agenda';
 import Login from './pages/Login';
 import Pacientes from './pages/Pacientes';
 import Solicitudes from './pages/Solicitudes';
-import Usuarios from './pages/Usuarios';
+import UsuariosPage from './pages/UsuariosPage';
 import { useAuth } from './hooks/useAuth';
 
 const AdminRoute = ({ children }) => {
@@ -38,7 +38,7 @@ function App() {
                 <Route path="agenda" element={<Agenda />} />
                 <Route path="pacientes" element={<Pacientes />} />
                 <Route path="solicitudes" element={<Solicitudes />} />
-                <Route path="usuarios" element={<AdminRoute><Usuarios /></AdminRoute>} />
+                <Route path="usuarios" element={<AdminRoute><UsuariosPage /></AdminRoute>} />
               </Route>
               <Route path="*" element={<Navigate to="/agenda" replace />} />
             </Routes>
