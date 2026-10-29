@@ -19,6 +19,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { cn } from '../../lib/cn';
 import Badge from '../ui/Badge';
 import Button from '../ui/Button';
+import ThemeToggle from '../ui/ThemeToggle';
 
 const ETIQUETAS_ROL = {
   admin: 'Administrador',
@@ -44,6 +45,13 @@ const NAVEGACION = [
     descripcion: 'Peticiones por WhatsApp',
     Icono: ClipboardList,
   },
+  {
+    to: '/usuarios',
+    label: 'Usuarios',
+    descripcion: 'Crear recepcionistas',
+    Icono: Users,
+    requiereAdmin: true,
+  },
 ];
 
 const obtenerIniciales = (nombre = '') =>
@@ -57,17 +65,17 @@ const obtenerIniciales = (nombre = '') =>
 
 function SidebarContent({ usuario, etiquetaRol, iniciales, onLogout, onNavigate, onClose }) {
   return (
-    <div className="flex h-full flex-col bg-white">
-      <div className="flex h-16 items-center justify-between gap-3 border-b border-neutral-200 px-5">
+    <div className="flex h-full flex-col bg-white dark:bg-neutral-900">
+      <div className="flex h-16 items-center justify-between gap-3 border-b border-neutral-200 px-5 dark:border-neutral-800">
         <div className="flex min-w-0 items-center gap-2.5">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-field bg-primary-700 text-white shadow-xs">
             <Stethoscope className="size-5" aria-hidden="true" />
           </span>
           <div className="min-w-0">
-            <p className="truncate text-sm font-bold tracking-tight text-neutral-900">
+            <p className="truncate text-sm font-bold tracking-tight text-neutral-900 dark:text-neutral-100">
               DentAssist
             </p>
-            <p className="truncate text-xs text-neutral-500">Clínica dental</p>
+            <p className="truncate text-xs text-neutral-500 dark:text-neutral-400">Clínica dental</p>
           </div>
         </div>
 
@@ -76,7 +84,7 @@ function SidebarContent({ usuario, etiquetaRol, iniciales, onLogout, onNavigate,
             type="button"
             onClick={onClose}
             aria-label="Cerrar menú de navegación"
-            className="flex size-9 shrink-0 items-center justify-center rounded-field text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+            className="flex size-9 shrink-0 items-center justify-center rounded-field text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
           >
             <X className="size-5" aria-hidden="true" />
           </button>
@@ -87,7 +95,7 @@ function SidebarContent({ usuario, etiquetaRol, iniciales, onLogout, onNavigate,
         aria-label="Navegación principal"
         className="flex-1 space-y-1 overflow-y-auto p-3"
       >
-        {NAVEGACION.map(({ to, label, descripcion, Icono }) => (
+        {NAVEGACION.filter((item) => !item.requiereAdmin || usuario?.rol === 'admin').map(({ to, label, descripcion, Icono }) => (
           <NavLink
             key={to}
             to={to}
@@ -136,16 +144,16 @@ function SidebarContent({ usuario, etiquetaRol, iniciales, onLogout, onNavigate,
         ))}
       </nav>
 
-      <div className="border-t border-neutral-200 p-3">
-        <div className="flex items-center gap-3 rounded-field bg-neutral-50 p-3">
+      <div className="border-t border-neutral-200 p-3 dark:border-neutral-800">
+        <div className="flex items-center gap-3 rounded-field bg-neutral-50 p-3 dark:bg-neutral-800">
           <span
-            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-100 text-xs font-bold text-primary-800"
+            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-100 text-xs font-bold text-primary-800 dark:bg-primary-900 dark:text-primary-200"
             aria-hidden="true"
           >
             {iniciales}
           </span>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-neutral-900">
+            <p className="truncate text-sm font-semibold text-neutral-900 dark:text-neutral-100">
               {usuario?.nombre || 'Personal de la clínica'}
             </p>
             <div className="mt-1">
@@ -159,14 +167,17 @@ function SidebarContent({ usuario, etiquetaRol, iniciales, onLogout, onNavigate,
           </div>
         </div>
 
-        <Button
-          variant="ghost"
-          onClick={onLogout}
-          leftIcon={<LogOut aria-hidden="true" />}
-          className="mt-2 w-full justify-start"
-        >
-          Cerrar sesión
-        </Button>
+        <div className="mt-2 flex items-center justify-between">
+          <ThemeToggle />
+          <Button
+            variant="ghost"
+            onClick={onLogout}
+            leftIcon={<LogOut aria-hidden="true" />}
+            className="justify-start"
+          >
+            Cerrar sesión
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -204,7 +215,7 @@ function AppShell() {
         Saltar al contenido
       </a>
 
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-sidebar border-r border-neutral-200 bg-white lg:block">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-sidebar border-r border-neutral-200 bg-white lg:block dark:border-neutral-800 dark:bg-neutral-900">
         <SidebarContent
           usuario={usuario}
           etiquetaRol={etiquetaRol}
