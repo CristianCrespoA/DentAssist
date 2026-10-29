@@ -48,4 +48,8 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+app.get('/api/solicitudes/:id', (req, res) => {
+  res.status(200).json({ id: req.params.id });
+});
+
 module.exports = app;
