@@ -188,24 +188,49 @@ export default function Usuarios() {
             ) : usuarios.length === 0 ? (
               <p className="text-center text-neutral-500 dark:text-neutral-400">No hay usuarios registrados</p>
             ) : (
-              <div className="space-y-2">
+              <div className="divide-y divide-neutral-200 dark:divide-neutral-800">
                 {usuarios.map((u) => (
-                  <div key={u.id} className="flex items-center justify-between rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
-                    <div>
-                      <p className="font-medium text-neutral-900 dark:text-neutral-100">{u.nombre} {u.apellido}</p>
-                      <p className="text-sm text-neutral-500 dark:text-neutral-400">{u.correo || u.email}</p>
-                      <p className="text-xs text-neutral-400">{u.rol}</p>
+                  <div key={u.id} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-200">
+                        {(u.nombre?.[0] || u.correo?.[0] || 'U').toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-neutral-900 dark:text-neutral-100">
+                            {u.nombre} {u.apellido}
+                          </p>
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                              u.rol === 'admin'
+                                ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-200'
+                                : 'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300'
+                            }`}
+                          >
+                            {u.rol === 'admin' ? 'Administrador' : 'Recepcionista'}
+                          </span>
+                        </div>
+                        <p className="text-sm text-neutral-500 dark:text-neutral-400">{u.correo || u.email}</p>
+                      </div>
                     </div>
-                    <div className="flex gap-1">
-                      <Button size="icon" variant="ghost" onClick={() => abrirEditar(u)} title="Editar">
+                    <div className="flex items-center gap-1 self-end sm:self-auto">
+                      <Button size="sm" variant="ghost" onClick={() => abrirEditar(u)} className="gap-1">
                         <Pencil className="h-4 w-4" />
+                        Editar
                       </Button>
-                      <Button size="icon" variant="ghost" onClick={() => abrirPassword(u)} title="Cambiar contraseña">
+                      <Button size="sm" variant="ghost" onClick={() => abrirPassword(u)} className="gap-1">
                         <KeyRound className="h-4 w-4" />
+                        Contraseña
                       </Button>
-                      {u.rol !== 'admin' && (
-                        <Button size="icon" variant="ghost" onClick={() => eliminarUsuario(u)} title="Eliminar">
+                      {u.rol !== 'admin' ? (
+                        <Button size="sm" variant="ghost" onClick={() => eliminarUsuario(u)} className="gap-1 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300">
                           <Trash2 className="h-4 w-4" />
+                          Eliminar
+                        </Button>
+                      ) : (
+                        <Button size="sm" variant="ghost" disabled className="gap-1 opacity-50">
+                          <Trash2 className="h-4 w-4" />
+                          Eliminar
                         </Button>
                       )}
                     </div>
