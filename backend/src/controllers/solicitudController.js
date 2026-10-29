@@ -26,10 +26,7 @@ const obtener = async (req, res) => {
         { model: db.Paciente, as: 'paciente' },
         { model: db.Servicio, as: 'servicio' },
         { model: db.Cita, as: 'cita' },
-        {
-          model: db.Conversacion,
-          as: 'conversacion'
-        },
+        { model: db.Conversacion, as: 'conversacion' },
         {
           model: db.SolicitudHistorial,
           as: 'historial',
@@ -44,14 +41,25 @@ const obtener = async (req, res) => {
       throw errorNegocio('Solicitud no encontrada', 404);
     }
 
-    const plain = solicitud.toJSON ? solicitud.toJSON() : solicitud;
-    if (plain.conversacion && plain.conversacion.id) {
-      const mensajes = await db.Mensaje.findAll({
-        where: { conversacionId: plain.conversacion.id },
-        order: [['ocurridoEn', 'ASC'], ['createdAt', 'ASC']]
-      });
-      plain.conversacion.mensajes = mensajes.map(m => m.toJSON ? m.toJSON() : m);
+    let plain;
+    try {
+      plain = solicitud.toJSON ? solicitud.toJSON() : solicitud;
+    } catch (e) {
+      plain = solicitud.get ? solicitud.get({ plain: true }) : solicitud;
     }
+
+    try {
+      if (plain.conversacion && plain.conversacion.id && db.Mensaje) {
+        const mensajes = await db.Mensaje.findAll({
+          where: { conversacionId: plain.conversacion.id },
+          order: [['ocurridoEn', 'ASC'], ['createdAt', 'ASC']]
+        });
+        plain.conversacion.mensajes = mensajes.map(m => (m.toJSON ? m.toJSON() : m));
+      }
+    } catch (e) {
+      console.error('ERROR MENSAJES:', e.message);
+    }
+
     if (Array.isArray(plain.historial)) {
       plain.historial.sort((a, b) => {
         const ta = new Date(a.createdAt || 0).getTime();
