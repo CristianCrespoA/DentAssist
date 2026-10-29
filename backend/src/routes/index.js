@@ -9,8 +9,8 @@ const servicioRoutes = require('./servicioRoutes');
 const solicitudRoutes = require('./solicitudRoutes');
 const whatsappRoutes = require('./whatsappRoutes');
 const whatsappChatRoutes = require('./whatsappChat');
-const authController = require('./controllers/authController');
-const { authMiddleware, roleMiddleware } = require('./middlewares/authMiddleware');
+const authController = require('../controllers/authController');
+const { authMiddleware, roleMiddleware } = require('../middlewares/authMiddleware');
 
 router.get('/', (req, res) => {
   res.json({ message: 'API routes' });
