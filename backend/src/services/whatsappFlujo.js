@@ -1320,6 +1320,25 @@ const procesar = async ({ conversacion, paciente, mensaje, seleccion = null }) =
       return mostrarMenu(conversacion, { saludo: false });
     }
 
+    const solicitudAbierta = await db.Solicitud.findOne({
+      where: {
+        conversacionId: conversacion.id,
+        estado: { [Op.in]: ['pendiente', 'en_atencion'] }
+      },
+      order: [['id', 'DESC']]
+    });
+
+    if (!solicitudAbierta) {
+      await guardar(conversacion, ESTADOS_FLUJO.MENU, {
+        ...LIMPIAR_RESERVA,
+        opciones: FILAS_MENU.map((fila) => fila.id)
+      });
+      return mostrarMenu(conversacion, {
+        saludo: false,
+        encabezado: 'Hola de nuevo. Retomamos el asistente virtual. ¿En qué te puedo ayudar?'
+      });
+    }
+
     // Recepción ya tiene la conversación: los mensajes siguientes se agregan a
     // la misma solicitud sin enviar respuestas automáticas.
     await registrarEscalamiento(conversacion, paciente, mensaje?.contenido);
