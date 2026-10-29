@@ -42,6 +42,11 @@ const perfil = async (req, res) => {
 
 const listarUsuarios = async (req, res) => {
   try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    res.removeHeader('ETag');
+
     const usuarios = await Usuario.findAll({
       attributes: ['id', 'nombre', 'email', 'rol'],
       order: [['id', 'ASC']]
