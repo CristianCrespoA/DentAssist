@@ -26,22 +26,21 @@ export default function Usuarios() {
     setCargandoLista(true);
     setUsuarios([]);
     try {
-      const data = await api.get(`/auth/usuarios?_=${Date.now()}`);
-      console.log('USUARIOS DATA:', data, typeof data);
-      const lista = Array.isArray(data) ? data : Array.isArray(data?.usuarios) ? data.usuarios : Array.isArray(data?.data) ? data.data : [];
-      console.log('LISTA:', lista);
+      const token = localStorage.getItem('token');
+      const res = await fetch(`https://dentassist-backend-babh.onrender.com/api/auth/usuarios?_=${Date.now()}`, {
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : '',
+          'Accept': 'application/json'
+        },
+        cache: 'no-store'
+      });
+      const data = await res.json();
+      console.log('USUARIOS FETCH:', data);
+      const lista = Array.isArray(data) ? data : [];
       setUsuarios(lista);
     } catch (e) {
-      console.error('ERR1', e);
-      try {
-        const data2 = await api.get(`/usuarios?_=${Date.now()}`);
-        console.log('USUARIOS DATA2:', data2);
-        const lista2 = Array.isArray(data2) ? data2 : Array.isArray(data2?.usuarios) ? data2.usuarios : [];
-        setUsuarios(lista2);
-      } catch (e2) {
-        console.error('ERR2', e2);
-        setUsuarios([]);
-      }
+      console.error('ERR FETCH', e);
+      setUsuarios([]);
     } finally {
       setCargandoLista(false);
     }
