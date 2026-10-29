@@ -181,6 +181,7 @@ export default function Usuarios() {
           <div className="border-b border-neutral-200 px-6 py-4 dark:border-neutral-800">
             <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Lista de usuarios ({usuarios.length})</h2>
             <p className="text-sm text-neutral-500 dark:text-neutral-400">Usuarios registrados en el sistema</p>
+            <pre className="text-xs mt-2">{JSON.stringify(usuarios)}</pre>
           </div>
           <div className="overflow-x-auto">
             <Table>
