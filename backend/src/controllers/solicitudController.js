@@ -28,13 +28,7 @@ const obtener = async (req, res) => {
         { model: db.Cita, as: 'cita' },
         {
           model: db.Conversacion,
-          as: 'conversacion',
-          include: [
-            {
-              model: db.Mensaje,
-              as: 'mensajes'
-            }
-          ]
+          as: 'conversacion'
         },
         {
           model: db.SolicitudHistorial,
@@ -51,12 +45,12 @@ const obtener = async (req, res) => {
     }
 
     const plain = solicitud.toJSON ? solicitud.toJSON() : solicitud;
-    if (plain.conversacion && Array.isArray(plain.conversacion.mensajes)) {
-      plain.conversacion.mensajes.sort((a, b) => {
-        const ta = new Date(a.ocurridoEn || a.createdAt || 0).getTime();
-        const tb = new Date(b.ocurridoEn || b.createdAt || 0).getTime();
-        return ta - tb;
+    if (plain.conversacion && plain.conversacion.id) {
+      const mensajes = await db.Mensaje.findAll({
+        where: { conversacionId: plain.conversacion.id },
+        order: [['ocurridoEn', 'ASC'], ['createdAt', 'ASC']]
       });
+      plain.conversacion.mensajes = mensajes.map(m => m.toJSON ? m.toJSON() : m);
     }
     if (Array.isArray(plain.historial)) {
       plain.historial.sort((a, b) => {
