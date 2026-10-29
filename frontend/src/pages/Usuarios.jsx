@@ -43,13 +43,13 @@ export default function Usuarios() {
     setLoading(true);
     setMsg(null);
     try {
-      await api.post('/auth/register', { ...form, rol: 'recepcionista' });
+      await api.post('/auth/register', { nombre: form.nombre + (form.apellido ? ' ' + form.apellido : ''), email: form.correo, password: form.contrasena, rol: 'recepcionista' });
       setMsg({ tipo: 'ok', texto: 'Recepcionista creado correctamente' });
       setForm({ nombre: '', apellido: '', correo: '', contrasena: '' });
       cargarUsuarios();
     } catch (err) {
       try {
-        await api.post('/usuarios', { ...form, rol: 'recepcionista' });
+        await api.post('/usuarios', { nombre: form.nombre + (form.apellido ? ' ' + form.apellido : ''), email: form.correo, password: form.contrasena, rol: 'recepcionista' });
         setMsg({ tipo: 'ok', texto: 'Recepcionista creado correctamente' });
         setForm({ nombre: '', apellido: '', correo: '', contrasena: '' });
         cargarUsuarios();
