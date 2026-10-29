@@ -150,7 +150,7 @@ export default function Usuarios() {
                 <Input name="nombre" value={form.nombre} onChange={handleChange} required />
               </Field>
               <Field label="Apellido">
-                <Input name="apellido" value={form.apellido} onChange={handleChange} required />
+                <Input name="apellido" value={form.apellido} onChange={handleChange} />
               </Field>
             </div>
             <Field label="Correo electrónico">
