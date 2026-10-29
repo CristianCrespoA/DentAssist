@@ -179,7 +179,6 @@ export default function Usuarios() {
             <p className="text-sm text-neutral-500 dark:text-neutral-400">Usuarios registrados en el sistema</p>
           </div>
           <div className="overflow-x-auto">
-            <pre className="text-xs p-2">{JSON.stringify(usuarios)}</pre>
             <Table>
               <Table.Header>
                 <Table.Row>
