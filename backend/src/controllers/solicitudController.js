@@ -32,8 +32,7 @@ const obtener = async (req, res) => {
           include: [
             {
               model: db.Mensaje,
-              as: 'mensajes',
-              order: [['ocurridoEn', 'ASC']]
+              as: 'mensajes'
             }
           ]
         },
@@ -42,8 +41,7 @@ const obtener = async (req, res) => {
           as: 'historial',
           include: [
             { model: db.Usuario, as: 'usuario', attributes: ['id', 'nombre', 'apellido'] }
-          ],
-          order: [['createdAt', 'ASC']]
+          ]
         }
       ]
     });
@@ -52,8 +50,25 @@ const obtener = async (req, res) => {
       throw errorNegocio('Solicitud no encontrada', 404);
     }
 
-    return res.status(200).json(solicitud);
+    const plain = solicitud.toJSON ? solicitud.toJSON() : solicitud;
+    if (plain.conversacion && Array.isArray(plain.conversacion.mensajes)) {
+      plain.conversacion.mensajes.sort((a, b) => {
+        const ta = new Date(a.ocurridoEn || a.createdAt || 0).getTime();
+        const tb = new Date(b.ocurridoEn || b.createdAt || 0).getTime();
+        return ta - tb;
+      });
+    }
+    if (Array.isArray(plain.historial)) {
+      plain.historial.sort((a, b) => {
+        const ta = new Date(a.createdAt || 0).getTime();
+        const tb = new Date(b.createdAt || 0).getTime();
+        return ta - tb;
+      });
+    }
+
+    return res.status(200).json(plain);
   } catch (error) {
+    console.error('ERROR OBTENER SOLICITUD:', error);
     return manejarError(res, error);
   }
 };
