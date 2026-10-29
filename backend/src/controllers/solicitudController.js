@@ -66,13 +66,19 @@ const obtener = async (req, res) => {
     try {
       const historial = await db.SolicitudHistorial.findAll({
         where: { solicitudId: plain.id },
-        include: [{ model: db.Usuario, as: 'usuario', attributes: ['id', 'nombre', 'apellido'] }],
         order: [['createdAt', 'ASC']]
       });
-      plain.historial = historial.map(h => {
+      plain.historial = [];
+      for (const h of historial) {
         const ph = h.toJSON ? h.toJSON() : h;
-        return ph;
-      });
+        try {
+          if (ph.usuarioId) {
+            const u = await db.Usuario.findByPk(ph.usuarioId, { attributes: ['id', 'nombre', 'apellido'] });
+            if (u) ph.usuario = u.toJSON ? u.toJSON() : u;
+          }
+        } catch (e2) { console.error('ERR HIST USR', e2.message); }
+        plain.historial.push(ph);
+      }
     } catch (e) { console.error('ERR HIST', e.message); }
 
     return res.status(200).json(plain);
