@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
 
-router.get('/:id', function(req, res) {
-  return res.json({ id: req.params.id });
+router.get('/:id', (req, res) => {
+  res.status(200).json({ id: req.params.id });
 });
 
 module.exports = router;
