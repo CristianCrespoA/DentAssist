@@ -18,14 +18,11 @@ export default function Usuarios() {
   const cargarUsuarios = async () => {
     setCargandoLista(true);
     try {
-      const data = await api.get('/auth/perfil');
-    } catch {}
-    try {
-      const data = await api.get('/usuarios');
+      const data = await api.get('/auth/usuarios');
       setUsuarios(Array.isArray(data) ? data : data?.usuarios || []);
     } catch {
       try {
-        const data = await api.get('/auth/usuarios');
+        const data = await api.get('/usuarios');
         setUsuarios(Array.isArray(data) ? data : data?.usuarios || []);
       } catch {
         setUsuarios([]);

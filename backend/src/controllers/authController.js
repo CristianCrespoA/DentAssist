@@ -1,4 +1,5 @@
 const authService = require('../services/authService');
+const { Usuario } = require('../models');
 
 const manejarError = (res, error, statusCodePorDefecto) => {
   return res.status(error.statusCode || statusCodePorDefecto).json({ mensaje: error.message });
@@ -38,8 +39,21 @@ const perfil = async (req, res) => {
   return res.status(200).json({ usuario: req.usuario });
 };
 
+const listarUsuarios = async (req, res) => {
+  try {
+    const usuarios = await Usuario.findAll({
+      attributes: ['id', 'nombre', 'apellido', 'correo', 'email', 'rol', 'activo'],
+      order: [['id', 'ASC']]
+    });
+    return res.status(200).json(usuarios);
+  } catch (error) {
+    return manejarError(res, error, 500);
+  }
+};
+
 module.exports = {
   login,
   register,
-  perfil
+  perfil,
+  listarUsuarios
 };
