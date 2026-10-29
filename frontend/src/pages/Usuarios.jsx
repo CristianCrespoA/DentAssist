@@ -24,17 +24,19 @@ export default function Usuarios() {
 
   const cargarUsuarios = async () => {
     setCargandoLista(true);
+    setUsuarios([]);
     try {
       const data = await api.get(`/auth/usuarios?_=${Date.now()}`);
-      console.log('USUARIOS DATA:', data);
-      const lista = Array.isArray(data) ? data : data?.usuarios || data?.data || data?.rows || [];
+      console.log('USUARIOS DATA:', data, typeof data);
+      const lista = Array.isArray(data) ? data : Array.isArray(data?.usuarios) ? data.usuarios : Array.isArray(data?.data) ? data.data : [];
+      console.log('LISTA:', lista);
       setUsuarios(lista);
     } catch (e) {
       console.error('ERR1', e);
       try {
         const data2 = await api.get(`/usuarios?_=${Date.now()}`);
         console.log('USUARIOS DATA2:', data2);
-        const lista2 = Array.isArray(data2) ? data2 : data2?.usuarios || data2?.data || data2?.rows || [];
+        const lista2 = Array.isArray(data2) ? data2 : Array.isArray(data2?.usuarios) ? data2.usuarios : [];
         setUsuarios(lista2);
       } catch (e2) {
         console.error('ERR2', e2);
