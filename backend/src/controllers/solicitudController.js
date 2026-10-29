@@ -21,14 +21,14 @@ const listar = async (req, res) => {
 
 const obtener = async (req, res) => {
   try {
-    const solicitud = await db.Solicitud.findByPk(req.params.id);
-    if (!solicitud) {
+    const s = await db.Solicitud.findOne({ where: { id: req.params.id } });
+    if (!s) {
       return res.status(404).json({ mensaje: 'Solicitud no encontrada' });
     }
-    const plain = typeof solicitud.toJSON === 'function' ? solicitud.toJSON() : solicitud;
-    return res.status(200).json(plain);
+    const p = s.get ? s.get({ plain: true }) : s;
+    return res.status(200).json(p);
   } catch (error) {
-    console.error('ERR_OBTENER:', error && error.message);
+    console.error('ERR_OBTENER:', error && error.stack ? error.stack.split('\n')[0] : error);
     return res.status(500).json({ mensaje: 'Error interno del servidor' });
   }
 };
