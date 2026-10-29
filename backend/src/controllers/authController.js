@@ -1,5 +1,6 @@
 const authService = require('../services/authService');
 const { Usuario } = require('../models');
+const bcrypt = require('bcryptjs');
 
 const manejarError = (res, error, statusCodePorDefecto) => {
   return res.status(error.statusCode || statusCodePorDefecto).json({ mensaje: error.message });
@@ -67,9 +68,96 @@ const listarUsuarios = async (req, res) => {
   }
 };
 
+const obtenerUsuario = async (req, res) => {
+  try {
+    const usuario = await Usuario.findByPk(req.params.id, {
+      attributes: ['id', 'nombre', 'email', 'rol']
+    });
+    if (!usuario) {
+      return res.status(404).json({ mensaje: 'Usuario no encontrado' });
+    }
+    const plain = usuario.get ? usuario.get({ plain: true }) : usuario;
+    const nombreCompleto = plain.nombre || '';
+    const partes = nombreCompleto.trim().split(/\s+/);
+    const nombre = partes.shift() || nombreCompleto;
+    const apellido = partes.join(' ');
+    return res.status(200).json({
+      id: plain.id,
+      nombre,
+      apellido,
+      correo: plain.email,
+      email: plain.email,
+      rol: plain.rol,
+      activo: true
+    });
+  } catch (error) {
+    return manejarError(res, error, 500);
+  }
+};
+
+const actualizarUsuario = async (req, res) => {
+  try {
+    const { nombre, apellido, correo, email, rol } = req.body;
+    const usuario = await Usuario.findByPk(req.params.id);
+    if (!usuario) {
+      return res.status(404).json({ mensaje: 'Usuario no encontrado' });
+    }
+    const correoFinal = correo || email;
+    const nombreFinal = apellido ? `${nombre || ''} ${apellido}`.trim() : nombre || usuario.nombre;
+    await usuario.update({
+      nombre: nombreFinal,
+      email: correoFinal || usuario.email,
+      rol: rol || usuario.rol
+    });
+    return res.status(200).json({ mensaje: 'Usuario actualizado correctamente' });
+  } catch (error) {
+    return manejarError(res, error, 400);
+  }
+};
+
+const cambiarContrasena = async (req, res) => {
+  try {
+    const { password, contrasena, nuevaContrasena } = req.body;
+    const nueva = password || contrasena || nuevaContrasena;
+    if (!nueva) {
+      return res.status(400).json({ mensaje: 'La contraseña es obligatoria' });
+    }
+    const usuario = await Usuario.findByPk(req.params.id);
+    if (!usuario) {
+      return res.status(404).json({ mensaje: 'Usuario no encontrado' });
+    }
+    await usuario.update({
+      password: bcrypt.hashSync(nueva, 10)
+    });
+    return res.status(200).json({ mensaje: 'Contraseña actualizada correctamente' });
+  } catch (error) {
+    return manejarError(res, error, 400);
+  }
+};
+
+const eliminarUsuario = async (req, res) => {
+  try {
+    const usuario = await Usuario.findByPk(req.params.id);
+    if (!usuario) {
+      return res.status(404).json({ mensaje: 'Usuario no encontrado' });
+    }
+    if (req.usuario && req.usuario.id == req.params.id) {
+      return res.status(400).json({ mensaje: 'No puedes eliminar tu propio usuario' });
+    }
+    await usuario.destroy();
+    return res.status(200).json({ mensaje: 'Usuario eliminado correctamente' });
+  } catch (error) {
+    return manejarError(res, error, 400);
+  }
+};
+
 module.exports = {
   login,
   register,
   perfil,
-  listarUsuarios
+  listarUsuarios,
+  obtenerUsuario,
+  actualizarUsuario,
+  cambiarContrasena,
+  eliminarUsuario
 };
