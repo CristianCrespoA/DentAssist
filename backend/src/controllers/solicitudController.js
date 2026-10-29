@@ -19,8 +19,18 @@ const listar = async (req, res) => {
   }
 };
 
-const obtener = (req, res) => {
-  res.status(200).json({ id: req.params.id });
+const obtener = async (req, res) => {
+  try {
+    const solicitud = await db.Solicitud.findByPk(req.params.id);
+    if (!solicitud) {
+      return res.status(404).json({ mensaje: 'Solicitud no encontrada' });
+    }
+    const plain = typeof solicitud.toJSON === 'function' ? solicitud.toJSON() : solicitud;
+    return res.status(200).json(plain);
+  } catch (error) {
+    console.error('ERR_OBTENER:', error && error.message);
+    return res.status(500).json({ mensaje: 'Error interno del servidor' });
+  }
 };
 
 const cambiarEstado = async (req, res) => {
