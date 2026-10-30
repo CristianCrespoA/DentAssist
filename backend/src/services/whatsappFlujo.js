@@ -1078,7 +1078,7 @@ const manejarServicio = async (conversacion, entrada, seleccion) => {
 
 const manejarProfesional = async (conversacion, entrada, seleccion) => {
   try {
-  const contexto = leerContexto(conversacion);
+    const contexto = leerContexto(conversacion);
   const profesionales = await db.Profesional.findAll({
     where: { activo: true },
     attributes: ['id', 'nombre', 'apellido'],
@@ -1118,6 +1118,11 @@ const manejarProfesional = async (conversacion, entrada, seleccion) => {
   return construirPasoFecha(conversacion, {
     encabezado: `Profesional: ${profesionalNombre}`
   });
+  } catch (error) {
+    registrarError('whatsapp_manejar_profesional', error, { conversacionId: conversacion?.id });
+    await guardar(conversacion, ESTADOS_FLUJO.MENU, { ...LIMPIAR_RESERVA, opciones: FILAS_MENU.map((fila) => fila.id) });
+    return [texto('Hubo un problema al procesar tu selección. Por favor intenta nuevamente escribiendo *menú*.')];
+  }
 };
 
 const manejarFecha = async (conversacion, entrada, seleccion) => {
