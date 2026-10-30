@@ -216,22 +216,10 @@ const listarCitas = async (filtros = {}) => {
   try {
     citas = await db.Cita.findAll({
       where,
-      include: [
-        { model: db.Paciente, as: 'paciente', attributes: ['id', 'nombre', 'apellido', 'telefono'], required: false },
-        { model: db.Profesional, as: 'profesional', attributes: ['id', 'nombre', 'apellido', 'especialidad'], required: false },
-        { model: db.Servicio, as: 'servicio', attributes: ['id', 'nombre', 'duracionMinutos', 'precio'], required: false }
-      ],
       order: [['fecha', 'ASC'], ['hora', 'ASC']]
     });
   } catch (e) {
-    try {
-      citas = await db.Cita.findAll({
-        where,
-        order: [['fecha', 'ASC'], ['hora', 'ASC']]
-      });
-    } catch (e2) {
-      citas = [];
-    }
+    citas = [];
   }
 
   return citas;
