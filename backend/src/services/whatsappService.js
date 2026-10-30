@@ -202,7 +202,7 @@ const procesarMensajeEntrante = async (datos, opciones = {}) => {
     };
   }
 
-  const paciente =
+  let paciente =
     (await buscarPaciente(telefono)) ||
     (await crearPacienteWhatsapp(telefono, datos?.nombrePerfil));
 
@@ -211,6 +211,24 @@ const procesarMensajeEntrante = async (datos, opciones = {}) => {
     pacienteId: paciente.id,
     nombrePerfil: datos?.nombrePerfil
   });
+
+  // Si es la primera vez y no tiene datos completos, pedir datos
+  if (paciente && (!paciente.nombre || paciente.nombre === NOMBRE_CONTACTO_POR_DEFECTO || !paciente.correo)) {
+    await conversacion.update({ estadoFlujo: ESTADOS_FLUJO.REGISTRO_NOMBRE });
+    await enviarYGuardar({
+      conversacion,
+      contenido: 'Para poder atenderte correctamente, necesitamos tus datos.\n\n¿Cuál es tu nombre?',
+      textoPlano: 'Para poder atenderte correctamente, necesitamos tus datos.\n\n¿Cuál es tu nombre?',
+      simulado
+    });
+    return {
+      duplicado: false,
+      conversacion,
+      paciente,
+      mensaje,
+      respuestas: []
+    };
+  }
 
   const mensaje = await crearEntrante({
     conversacion,

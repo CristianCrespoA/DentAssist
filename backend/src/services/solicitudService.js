@@ -430,6 +430,7 @@ const cambiarEstadoSolicitud = async (id, datos, usuario) => {
   validarEstado(estadoNuevo);
 
   const comentario = normalizarComentario(datos.comentario);
+  const mensajeResolucionExtra = typeof datos.mensajeResolucion === 'string' ? datos.mensajeResolucion.trim() : '';
 
   await db.sequelize.transaction(async (transaccion) => {
     const solicitud = await db.Solicitud.findByPk(solicitudId, {
@@ -473,7 +474,7 @@ const cambiarEstadoSolicitud = async (id, datos, usuario) => {
         estadoAnterior,
         estadoNuevo,
         usuarioId: usuario?.id ?? null,
-        comentario
+        comentario: mensajeResolucionExtra ? `${comentario || ''}\n\n${mensajeResolucionExtra}`.trim() : comentario
       },
       { transaction: transaccion }
     );
@@ -482,6 +483,16 @@ const cambiarEstadoSolicitud = async (id, datos, usuario) => {
   const solicitud = await obtenerSolicitud(solicitudId);
 
   if (estadoNuevo === 'resuelta') {
+    if (mensajeResolucionExtra) {
+      try {
+        if (solicitud && solicitud.origen === 'whatsapp') {
+          const conversacion = await conversacionDeSolicitud(solicitud);
+          if (conversacion) {
+            await whatsappSalientes.enviarYGuardar({ conversacion, contenido: mensajeResolucionExtra, textoPlano: mensajeResolucionExtra });
+          }
+        }
+      } catch (e) {}
+    }
     await notificarResolucion(solicitud);
   }
 

@@ -57,6 +57,9 @@ const RANGO_ESTADO = {
 const ESTADOS_FLUJO = {
   INICIAL: 'inicial',
   AVISO_ENVIADO: 'aviso_enviado',
+  REGISTRO_NOMBRE: 'registro_nombre',
+  REGISTRO_APELLIDO: 'registro_apellido',
+  REGISTRO_CORREO: 'registro_correo',
   MENU: 'menu',
   INFO_SERVICIOS: 'info_servicios',
   DISPONIBILIDAD: 'disponibilidad',
@@ -64,11 +67,15 @@ const ESTADOS_FLUJO = {
   SOLICITAR_PROFESIONAL: 'solicitar_profesional',
   SOLICITAR_FECHA: 'solicitar_fecha',
   SOLICITAR_HORA: 'solicitar_hora',
+  SOLICITAR_DESCRIPCION: 'solicitar_descripcion',
   CONFIRMAR: 'confirmar',
   CANCELAR_CITA: 'cancelar_cita',
   REPROGRAMAR_CITA: 'reprogramar_cita',
   REPROGRAMAR_FECHA: 'reprogramar_fecha',
   REPROGRAMAR_HORA: 'reprogramar_hora',
+  ACTUALIZAR_NOMBRE: 'actualizar_nombre',
+  ACTUALIZAR_APELLIDO: 'actualizar_apellido',
+  ACTUALIZAR_CORREO: 'actualizar_correo',
   HUMANO: 'humano'
 };
 

@@ -3,7 +3,7 @@ const { manejarError } = require('../utils/errores');
 
 const crear = async (req, res) => {
   try {
-    const cita = await citaService.crearCita(req.body);
+    const cita = await citaService.crearCita(req.body, req.usuario);
     return res.status(201).json(cita);
   } catch (error) {
     return manejarError(res, error);

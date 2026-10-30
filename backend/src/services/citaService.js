@@ -24,7 +24,8 @@ const ESTADOS_QUE_OCUPAN = {
 const incluirRelaciones = [
   { model: db.Paciente, as: 'paciente', attributes: ['id', 'nombre', 'apellido', 'telefono'] },
   { model: db.Profesional, as: 'profesional', attributes: ['id', 'nombre', 'apellido', 'especialidad'] },
-  { model: db.Servicio, as: 'servicio', attributes: ['id', 'nombre', 'duracionMinutos', 'precio'] }
+  { model: db.Servicio, as: 'servicio', attributes: ['id', 'nombre', 'duracionMinutos', 'precio'] },
+  { model: db.Usuario, as: 'creador', attributes: ['id', 'nombre', 'email', 'rol'] }
 ];
 
 const esEnteroPositivo = (valor) => {
@@ -146,7 +147,7 @@ const obtenerCita = async (id) => {
   return cita;
 };
 
-const crearCita = async (datos) => {
+const crearCita = async (datos, usuario = null) => {
   validarCampos(datos);
 
   const servicio = await asegurarReferencias(datos);
@@ -170,6 +171,7 @@ const crearCita = async (datos) => {
     });
   }
 
+  const obs = datos.observaciones || null;
   const cita = await db.Cita.create({
     pacienteId: normalizarEntero(datos.pacienteId),
     profesionalId: normalizarEntero(datos.profesionalId),
@@ -178,7 +180,8 @@ const crearCita = async (datos) => {
     fecha: datos.fecha,
     hora: datos.hora,
     estado: datos.estado || 'programada',
-    observaciones: datos.observaciones || null
+    observaciones: usuario ? (obs ? `${obs} | Asignada por: ${usuario.nombre || usuario.email} (id:${usuario.id})` : `Asignada por: ${usuario.nombre || usuario.email} (id:${usuario.id})`) : obs,
+    creadoPor: usuario?.id || null
   });
 
   return obtenerCita(cita.id);

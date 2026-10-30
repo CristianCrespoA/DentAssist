@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
-  Stethoscope,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { api } from '../services/api';
@@ -59,7 +58,13 @@ const Login = () => {
 
   return (
     <div className="min-h-screen bg-neutral-100 lg:grid lg:grid-cols-2">
-      <aside className="relative hidden overflow-hidden bg-gradient-to-br from-primary-800 via-primary-900 to-neutral-950 p-12 text-white lg:flex lg:min-h-screen lg:flex-col lg:justify-between">
+      <aside className="relative hidden overflow-hidden p-12 text-white lg:flex lg:min-h-screen lg:flex-col lg:justify-between">
+        <img
+          src="https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?auto=format&fit=crop&w=1600&q=80"
+          alt="Cita odontológica"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-br from-primary-900/90 via-primary-900/80 to-neutral-950/90" aria-hidden="true" />
         <div
           className="pointer-events-none absolute -right-24 -top-24 size-80 rounded-full bg-primary-500/20 blur-3xl"
           aria-hidden="true"
@@ -71,7 +76,10 @@ const Login = () => {
 
         <div className="relative flex items-center gap-3">
           <span className="flex size-11 items-center justify-center rounded-card bg-white/10 ring-1 ring-white/20">
-            <Stethoscope className="size-6" aria-hidden="true" />
+            <svg className="size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 2C8.5 2 6 4.5 6 8c0 2.5 1.5 4.5 3 6 .5.5 1 1 1 2v2a2 2 0 0 0 4 0v-2c0-1 .5-1.5 1-2 1.5-1.5 3-3.5 3-6 0-3.5-2.5-6-6-6z" />
+              <path d="M9 22h6" />
+            </svg>
           </span>
           <div>
             <p className="text-lg font-bold tracking-tight">DentAssist</p>
@@ -110,7 +118,10 @@ const Login = () => {
         <div className="w-full max-w-md">
           <div className="flex items-center gap-3 lg:hidden">
             <span className="flex size-11 items-center justify-center rounded-card bg-primary-700 text-white shadow-xs">
-              <Stethoscope className="size-6" aria-hidden="true" />
+              <svg className="size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 2C8.5 2 6 4.5 6 8c0 2.5 1.5 4.5 3 6 .5.5 1 1 1 2v2a2 2 0 0 0 4 0v-2c0-1 .5-1.5 1-2 1.5-1.5 3-3.5 3-6 0-3.5-2.5-6-6-6z" />
+                <path d="M9 22h6" />
+              </svg>
             </span>
             <div>
               <p className="text-lg font-bold tracking-tight text-neutral-900">

@@ -9,6 +9,7 @@ module.exports = (sequelize, DataTypes) => {
       Cita.belongsTo(models.Profesional, { foreignKey: 'profesionalId', as: 'profesional' });
       Cita.belongsTo(models.Servicio, { foreignKey: 'servicioId', as: 'servicio' });
       Cita.belongsTo(models.Solicitud, { foreignKey: 'solicitudId', as: 'solicitud' });
+      Cita.belongsTo(models.Usuario, { foreignKey: 'creadoPor', as: 'creador' });
     }
   }
   Cita.init({
@@ -19,7 +20,8 @@ module.exports = (sequelize, DataTypes) => {
     fecha: DataTypes.DATEONLY,
     hora: DataTypes.TIME,
     estado: DataTypes.ENUM('programada', 'confirmada', 'atendida', 'cancelada', 'no_asistio'),
-    observaciones: DataTypes.TEXT
+    observaciones: DataTypes.TEXT,
+    creadoPor: DataTypes.INTEGER
   }, {
     sequelize,
     modelName: 'Cita',

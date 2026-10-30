@@ -68,9 +68,9 @@ const FILAS_MENU = [
     descripcion: 'Propón una nueva fecha'
   },
   {
-    id: 'menu:humano',
-    titulo: 'Hablar con una persona',
-    descripcion: 'Te contacta recepción'
+    id: 'menu:actualizar_datos',
+    titulo: 'Actualizar mis datos',
+    descripcion: 'Actualiza tu información'
   }
 ];
 
@@ -349,7 +349,7 @@ const mostrarMenu = async (conversacion, { saludo = true, encabezado = null } = 
   const cuerpo = [
     encabezado,
     saludo ? `${saludoPara(contexto)} Soy el asistente de DentAssist 🦷` : null,
-    '¿Qué necesitas hacer?'
+    encabezado ? null : '¿Qué necesitas hacer?'
   ]
     .filter(Boolean)
     .join('\n\n');
@@ -485,9 +485,10 @@ const resumenCita = (contexto) =>
     `• Profesional: ${contexto.profesionalNombre}`,
     `• Fecha: ${formatearFecha(contexto.fecha)}`,
     `• Hora: ${contexto.hora}`,
+    contexto.descripcion ? `• Asunto: ${contexto.descripcion}` : null,
     '',
     '¿Agendamos?'
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 
 const salidaConfirmacion = (contexto) =>
   botones(resumenCita(contexto), [
@@ -527,6 +528,35 @@ const iniciarServicio = async (conversacion, modo) => {
         ? 'Vamos a revisar la disponibilidad.'
         : 'Vamos a agendar tu cita.'
   });
+};
+
+const iniciarActualizacionDatos = async (conversacion, paciente) => {
+  await guardar(conversacion, ESTADOS_FLUJO.ACTUALIZAR_NOMBRE, {});
+  return [texto('Vamos a actualizar tus datos.\n\n¿Cuál es tu nombre?')];
+};
+
+const manejarActualizacionDatos = async (conversacion, paciente, estado, valor) => {
+  const ctx = leerContexto(conversacion);
+  if (estado === ESTADOS_FLUJO.ACTUALIZAR_NOMBRE) {
+    await guardar(conversacion, ESTADOS_FLUJO.ACTUALIZAR_APELLIDO, { nombreNuevo: valor.trim() });
+    return [texto('¿Cuál es tu apellido?')];
+  }
+  if (estado === ESTADOS_FLUJO.ACTUALIZAR_APELLIDO) {
+    await guardar(conversacion, ESTADOS_FLUJO.ACTUALIZAR_CORREO, { apellidoNuevo: valor.trim() });
+    return [texto('¿Cuál es tu correo electrónico?')];
+  }
+  if (estado === ESTADOS_FLUJO.ACTUALIZAR_CORREO) {
+    try {
+      if (paciente) {
+        await paciente.update({ nombre: ctx.nombreNuevo || paciente.nombre, apellido: ctx.apellidoNuevo || paciente.apellido, correo: valor.trim() });
+      }
+    } catch (e) {
+      // ignore
+    }
+    await guardar(conversacion, ESTADOS_FLUJO.MENU, { ...LIMPIAR_RESERVA, opciones: FILAS_MENU.map((fila) => fila.id) });
+    return [texto('Datos actualizados correctamente.\n\nEscribe *menú* para volver.')];
+  }
+  return mostrarMenu(conversacion, { saludo: false });
 };
 
 const construirPasoServicio = async (conversacion, { encabezado = null } = {}) => {
@@ -871,10 +901,8 @@ const manejarMenu = async (conversacion, paciente, entrada, seleccion, mensaje) 
       return iniciarCancelacion(conversacion);
     case 'reprogramar':
       return iniciarReprogramacion(conversacion);
-    case 'humano':
-      return derivarHumano(conversacion, paciente, {
-        mensaje: mensaje?.contenido
-      });
+    case 'actualizar_datos':
+      return iniciarActualizacionDatos(conversacion, paciente);
     default:
       // Una selección o un número fuera de rango es un error de pulsación; el
       // texto libre desconocido se escala a una persona.
@@ -911,10 +939,10 @@ const resolverMenuPorTexto = (entrada) => {
     'cancelar cita': 'cancelar',
     '5': 'reprogramar',
     reprogramar: 'reprogramar',
-    '6': 'humano',
-    'hablar con una persona': 'humano',
-    persona: 'humano',
-    asesor: 'humano'
+    '6': 'actualizar_datos',
+    'actualizar mis datos': 'actualizar_datos',
+    'actualizar datos': 'actualizar_datos',
+    datos: 'actualizar_datos'
   };
 
   return mapa[entrada] ?? null;
@@ -1149,13 +1177,20 @@ const manejarHora = async (conversacion, entrada, seleccion) => {
     });
   }
 
-  await guardar(conversacion, ESTADOS_FLUJO.CONFIRMAR, {
+  await guardar(conversacion, ESTADOS_FLUJO.SOLICITAR_DESCRIPCION, {
     hora,
     profesionalId: franja.profesionalId,
     profesionalNombre: franja.profesionalNombre || contexto.profesionalNombre
   });
 
-  return [salidaConfirmacion(leerContexto(conversacion))];
+  return [texto('Describe brevemente el motivo o asunto de tu cita (puedes escribirlo ahora):')];
+};
+
+const manejarDescripcion = async (conversacion, paciente, entrada) => {
+  const contexto = leerContexto(conversacion);
+  const descripcion = entrada.trim();
+  await guardar(conversacion, ESTADOS_FLUJO.CONFIRMAR, { descripcion });
+  return [salidaConfirmacion({ ...contexto, descripcion })];
 };
 
 const manejarConfirmacion = async (conversacion, paciente, entrada, seleccion) => {
@@ -1211,7 +1246,7 @@ const manejarConfirmacion = async (conversacion, paciente, entrada, seleccion) =
       fecha: contexto.fecha,
       hora: contexto.hora,
       estado: 'programada',
-      observaciones: 'Reservada por el asistente de WhatsApp'
+      observaciones: contexto.descripcion ? `Reservada por WhatsApp - ${contexto.descripcion}` : 'Reservada por el asistente de WhatsApp'
     });
 
     const profesional = `${cita.profesional?.nombre ?? ''} ${cita.profesional?.apellido ?? ''}`.trim();
@@ -1316,40 +1351,13 @@ const procesar = async ({ conversacion, paciente, mensaje, seleccion = null }) =
   const entrada = normalizar(mensaje?.contenido);
 
   if (conversacion.estadoFlujo === ESTADOS_FLUJO.HUMANO) {
-    if (esMenuExplicito(entrada, seleccion)) {
-      return mostrarMenu(conversacion, { saludo: false });
-    }
-
-    const solicitudAbierta = await db.Solicitud.findOne({
-      where: {
-        conversacionId: conversacion.id,
-        estado: { [Op.in]: ['pendiente', 'en_atencion'] }
-      },
-      order: [['id', 'DESC']]
-    });
-
-    if (!solicitudAbierta) {
-      await guardar(conversacion, ESTADOS_FLUJO.MENU, {
-        ...LIMPIAR_RESERVA,
-        opciones: FILAS_MENU.map((fila) => fila.id)
-      });
-      return mostrarMenu(conversacion, {
-        saludo: false,
-        encabezado: 'Hola de nuevo. Retomamos el asistente virtual. ¿En qué te puedo ayudar?'
-      });
-    }
-
-    // Recepción ya tiene la conversación: los mensajes siguientes se agregan a
-    // la misma solicitud sin enviar respuestas automáticas.
-    await registrarEscalamiento(conversacion, paciente, mensaje?.contenido);
-
-    return [];
+    return mostrarMenu(conversacion, { saludo: false, encabezado: 'El chat con humano ya no está disponible. Usa el menú.' });
   }
 
   const comando = detectarComando(entrada, seleccion);
 
   if (comando === 'humano') {
-    return derivarHumano(conversacion, paciente, { mensaje: mensaje?.contenido });
+    return mostrarMenu(conversacion, { saludo: false, encabezado: 'La opción "Hablar con una persona" ya no está disponible. Usa el menú para agendar, cancelar o reprogramar tu cita.' });
   }
 
   // En el menú, "cancelar" inicia el flujo de cancelación de una cita. En los
@@ -1378,6 +1386,26 @@ const procesar = async ({ conversacion, paciente, mensaje, seleccion = null }) =
     case ESTADOS_FLUJO.AVISO_ENVIADO:
     case ESTADOS_FLUJO.INFO_SERVICIOS:
       return mostrarMenu(conversacion, { saludo: false });
+    case ESTADOS_FLUJO.REGISTRO_NOMBRE:
+      if (paciente) {
+        await paciente.update({ nombre: mensaje?.contenido?.trim() });
+        await guardar(conversacion, ESTADOS_FLUJO.REGISTRO_APELLIDO, {});
+        return [texto('¿Cuál es tu apellido?')];
+      }
+      break;
+    case ESTADOS_FLUJO.REGISTRO_APELLIDO:
+      if (paciente) {
+        await paciente.update({ apellido: mensaje?.contenido?.trim() });
+        await guardar(conversacion, ESTADOS_FLUJO.REGISTRO_CORREO, {});
+        return [texto('¿Cuál es tu correo electrónico?')];
+      }
+      break;
+    case ESTADOS_FLUJO.REGISTRO_CORREO:
+      if (paciente) {
+        await paciente.update({ correo: mensaje?.contenido?.trim() });
+      }
+      await guardar(conversacion, ESTADOS_FLUJO.MENU, { ...LIMPIAR_RESERVA, opciones: FILAS_MENU.map((fila) => fila.id) });
+      return mostrarMenu(conversacion, { saludo: true, encabezado: 'Datos guardados correctamente.' });
     case ESTADOS_FLUJO.MENU:
       return manejarMenu(conversacion, paciente, entrada, seleccion, mensaje);
     case ESTADOS_FLUJO.SOLICITAR_SERVICIO:
@@ -1389,6 +1417,8 @@ const procesar = async ({ conversacion, paciente, mensaje, seleccion = null }) =
       return manejarFecha(conversacion, entrada, seleccion);
     case ESTADOS_FLUJO.SOLICITAR_HORA:
       return manejarHora(conversacion, entrada, seleccion);
+    case ESTADOS_FLUJO.SOLICITAR_DESCRIPCION:
+      return manejarDescripcion(conversacion, paciente, mensaje?.contenido || entrada);
     case ESTADOS_FLUJO.CONFIRMAR:
       return manejarConfirmacion(conversacion, paciente, entrada, seleccion);
     case ESTADOS_FLUJO.CANCELAR_CITA:
@@ -1398,11 +1428,14 @@ const procesar = async ({ conversacion, paciente, mensaje, seleccion = null }) =
       return manejarReprogramarFecha(conversacion, entrada, seleccion);
     case ESTADOS_FLUJO.REPROGRAMAR_HORA:
       return manejarReprogramarHora(conversacion, paciente, entrada, seleccion);
-    case ESTADOS_FLUJO.HUMANO:
-      return [];
+    case ESTADOS_FLUJO.ACTUALIZAR_NOMBRE:
+    case ESTADOS_FLUJO.ACTUALIZAR_APELLIDO:
+    case ESTADOS_FLUJO.ACTUALIZAR_CORREO:
+      return manejarActualizacionDatos(conversacion, paciente, conversacion.estadoFlujo, mensaje?.contenido || entrada);
     default:
       return mostrarMenu(conversacion, { saludo: false });
   }
+  return mostrarMenu(conversacion, { saludo: false });
 };
 
 const abrirMenu = async (conversacion, opciones = {}) => mostrarMenu(conversacion, opciones);
