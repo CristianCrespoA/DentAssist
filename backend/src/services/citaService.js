@@ -212,11 +212,23 @@ const listarCitas = async (filtros = {}) => {
     where.estado = filtros.estado;
   }
 
-  const citas = await db.Cita.findAll({
-    where,
-    include: incluirRelaciones,
-    order: [['fecha', 'ASC'], ['hora', 'ASC']]
-  });
+  let citas = [];
+  try {
+    citas = await db.Cita.findAll({
+      where,
+      include: incluirRelaciones,
+      order: [['fecha', 'ASC'], ['hora', 'ASC']]
+    });
+  } catch (e) {
+    try {
+      citas = await db.Cita.findAll({
+        where,
+        order: [['fecha', 'ASC'], ['hora', 'ASC']]
+      });
+    } catch (e2) {
+      citas = [];
+    }
+  }
 
   return citas;
 };
