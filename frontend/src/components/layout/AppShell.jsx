@@ -10,7 +10,6 @@ import {
   ClipboardList,
   LogOut,
   Menu,
-  Stethoscope,
   Users,
   X,
 } from 'lucide-react';
@@ -69,7 +68,9 @@ function SidebarContent({ usuario, etiquetaRol, iniciales, onLogout, onNavigate,
       <div className="flex h-16 items-center justify-between gap-3 border-b border-neutral-200 px-5 dark:border-neutral-800">
         <div className="flex min-w-0 items-center gap-2.5">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-field bg-primary-700 text-white shadow-xs">
-            <Stethoscope className="size-5" aria-hidden="true" />
+            <svg className="size-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 2C7.5 2 5 5 5 8c0 2 1 3.5 2 4.5.5.5 1 1 1 1.5v1a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-1c0-.5.5-1 1-1.5 1-1 2-2.5 2-4.5 0-3-2.5-6-7-6zm-2 13v1h4v-1H10zm-1 2h6v1a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-1z"/>
+            </svg>
           </span>
           <div className="min-w-0">
             <p className="truncate text-sm font-bold tracking-tight text-neutral-900 dark:text-neutral-100">
@@ -261,7 +262,9 @@ function AppShell() {
             />
             <div className="flex min-w-0 items-center gap-2">
               <span className="flex size-8 shrink-0 items-center justify-center rounded-field bg-primary-700 text-white">
-                <Stethoscope className="size-4" aria-hidden="true" />
+                <svg className="size-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M12 2C7.5 2 5 5 5 8c0 2 1 3.5 2 4.5.5.5 1 1 1 1.5v1a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-1c0-.5.5-1 1-1.5 1-1 2-2.5 2-4.5 0-3-2.5-6-7-6zm-2 13v1h4v-1H10zm-1 2h6v1a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-1z"/>
+                </svg>
               </span>
               <span className="truncate text-sm font-bold tracking-tight text-neutral-900 dark:text-neutral-100">
                 DentAssist

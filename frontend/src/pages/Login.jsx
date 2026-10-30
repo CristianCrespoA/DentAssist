@@ -76,9 +76,8 @@ const Login = () => {
 
         <div className="relative flex items-center gap-3">
           <span className="flex size-11 items-center justify-center rounded-card bg-white/10 ring-1 ring-white/20">
-            <svg className="size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M12 2C8.5 2 6 4.5 6 8c0 2.5 1.5 4.5 3 6 .5.5 1 1 1 2v2a2 2 0 0 0 4 0v-2c0-1 .5-1.5 1-2 1.5-1.5 3-3.5 3-6 0-3.5-2.5-6-6-6z" />
-              <path d="M9 22h6" />
+            <svg className="size-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 2C7.5 2 5 5 5 8c0 2 1 3.5 2 4.5.5.5 1 1 1 1.5v1a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-1c0-.5.5-1 1-1.5 1-1 2-2.5 2-4.5 0-3-2.5-6-7-6zm-2 13v1h4v-1H10zm-1 2h6v1a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-1z"/>
             </svg>
           </span>
           <div>
@@ -118,9 +117,8 @@ const Login = () => {
         <div className="w-full max-w-md">
           <div className="flex items-center gap-3 lg:hidden">
             <span className="flex size-11 items-center justify-center rounded-card bg-primary-700 text-white shadow-xs">
-              <svg className="size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M12 2C8.5 2 6 4.5 6 8c0 2.5 1.5 4.5 3 6 .5.5 1 1 1 2v2a2 2 0 0 0 4 0v-2c0-1 .5-1.5 1-2 1.5-1.5 3-3.5 3-6 0-3.5-2.5-6-6-6z" />
-                <path d="M9 22h6" />
+              <svg className="size-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 2C7.5 2 5 5 5 8c0 2 1 3.5 2 4.5.5.5 1 1 1 1.5v1a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-1c0-.5.5-1 1-1.5 1-1 2-2.5 2-4.5 0-3-2.5-6-7-6zm-2 13v1h4v-1H10zm-1 2h6v1a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-1z"/>
               </svg>
             </span>
             <div>

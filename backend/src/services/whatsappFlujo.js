@@ -1077,6 +1077,7 @@ const manejarServicio = async (conversacion, entrada, seleccion) => {
 };
 
 const manejarProfesional = async (conversacion, entrada, seleccion) => {
+  try {
   const contexto = leerContexto(conversacion);
   const profesionales = await db.Profesional.findAll({
     where: { activo: true },
