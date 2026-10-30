@@ -216,10 +216,18 @@ const listarCitas = async (filtros = {}) => {
   try {
     citas = await db.Cita.findAll({
       where,
-      order: [['fecha', 'ASC'], ['hora', 'ASC']]
+      order: [['fecha', 'ASC'], ['hora', 'ASC']],
+      raw: true
     });
   } catch (e) {
-    citas = [];
+    try {
+      citas = await db.Cita.findAll({
+        where,
+        order: [['fecha', 'ASC'], ['hora', 'ASC']]
+      }).then((r) => (Array.isArray(r) ? r.map((x) => (x.get ? x.get({ plain: true }) : x)) : []));
+    } catch (e2) {
+      citas = [];
+    }
   }
 
   return citas;
