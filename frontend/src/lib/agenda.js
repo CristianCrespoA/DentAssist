@@ -120,19 +120,23 @@ export const duracionCita = (cita) => {
 
 /** Rango horario visible de una cita: inicio, fin calculado con la duración. */
 export const rangoHorario = (cita) => {
-  const inicio = formatearHora(cita?.hora);
+  try {
+    const inicio = formatearHora(cita?.hora);
 
-  if (!inicio) {
-    return { inicio: '', fin: '', duracionMinutos: duracionCita(cita) };
+    if (!inicio) {
+      return { inicio: '', fin: '', duracionMinutos: duracionCita(cita) };
+    }
+
+    const duracion = duracionCita(cita);
+
+    return {
+      inicio,
+      fin: sumarMinutos(inicio, duracion),
+      duracionMinutos: duracion,
+    };
+  } catch (e) {
+    return { inicio: '', fin: '', duracionMinutos: 30 };
   }
-
-  const duracion = duracionCita(cita);
-
-  return {
-    inicio,
-    fin: sumarMinutos(inicio, duracion),
-    duracionMinutos: duracion,
-  };
 };
 
 export const resumirTexto = (texto, maximo = 60) => {
