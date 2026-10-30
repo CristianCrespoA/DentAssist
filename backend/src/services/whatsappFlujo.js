@@ -68,6 +68,11 @@ const FILAS_MENU = [
     descripcion: 'Propón una nueva fecha'
   },
   {
+    id: 'menu:crear_solicitud',
+    titulo: 'Crear solicitud',
+    descripcion: 'Enviar una consulta o solicitud'
+  },
+  {
     id: 'menu:actualizar_datos',
     titulo: 'Actualizar mis datos',
     descripcion: 'Actualiza tu información'
@@ -530,6 +535,37 @@ const iniciarServicio = async (conversacion, modo) => {
   });
 };
 
+const iniciarCrearSolicitud = async (conversacion) => {
+  await guardar(conversacion, ESTADOS_FLUJO.CREAR_SOLICITUD, {});
+  return [texto('Escribe tu solicitud o consulta. La enviaremos al equipo de recepción para que te atiendan lo antes posible.')];
+};
+
+const manejarCrearSolicitud = async (conversacion, paciente, mensaje) => {
+  const contenido = (mensaje?.contenido || '').trim();
+  if (!contenido) {
+    return [texto('Por favor escribe tu solicitud para poder enviarla.')];
+  }
+
+  try {
+    const solicitud = await solicitudWhatsappService.crearSolicitudDesdeWhatsApp({
+      conversacion,
+      paciente,
+      mensaje: contenido
+    });
+
+    await guardar(conversacion, ESTADOS_FLUJO.MENU, { ...LIMPIAR_RESERVA, opciones: FILAS_MENU.map((fila) => fila.id) });
+    
+    return [
+      texto(`Solicitud creada correctamente.\n\nSolicitud #${solicitud.id}\n\n${contenido}\n\nLos recepcionistas la atenderán. Te avisaremos por aquí cuando se resuelva.`),
+      lista('Escribe *menú* para volver al menú principal.', FILAS_MENU, { etiqueta: 'Ver opciones', seccion: 'Menú' })
+    ];
+  } catch (error) {
+    registrarError('whatsapp_crear_solicitud', error, { conversacionId: conversacion?.id });
+    await guardar(conversacion, ESTADOS_FLUJO.MENU, { ...LIMPIAR_RESERVA, opciones: FILAS_MENU.map((fila) => fila.id) });
+    return [texto('Hubo un error al crear tu solicitud. Por favor intenta nuevamente o escribe *menú* para volver.')];
+  }
+};
+
 const iniciarActualizacionDatos = async (conversacion, paciente) => {
   await guardar(conversacion, ESTADOS_FLUJO.ACTUALIZAR_NOMBRE, {});
   return [texto('Vamos a actualizar tus datos.\n\n¿Cuál es tu nombre?')];
@@ -901,6 +937,8 @@ const manejarMenu = async (conversacion, paciente, entrada, seleccion, mensaje) 
       return iniciarCancelacion(conversacion);
     case 'reprogramar':
       return iniciarReprogramacion(conversacion);
+    case 'crear_solicitud':
+      return iniciarCrearSolicitud(conversacion);
     case 'actualizar_datos':
       return iniciarActualizacionDatos(conversacion, paciente);
     default:
@@ -939,7 +977,11 @@ const resolverMenuPorTexto = (entrada) => {
     'cancelar cita': 'cancelar',
     '5': 'reprogramar',
     reprogramar: 'reprogramar',
-    '6': 'actualizar_datos',
+    '6': 'crear_solicitud',
+    'crear solicitud': 'crear_solicitud',
+    crear: 'crear_solicitud',
+    solicitud: 'crear_solicitud',
+    '7': 'actualizar_datos',
     'actualizar mis datos': 'actualizar_datos',
     'actualizar datos': 'actualizar_datos',
     datos: 'actualizar_datos'
@@ -1419,6 +1461,8 @@ const procesar = async ({ conversacion, paciente, mensaje, seleccion = null }) =
       return manejarHora(conversacion, entrada, seleccion);
     case ESTADOS_FLUJO.SOLICITAR_DESCRIPCION:
       return manejarDescripcion(conversacion, paciente, mensaje?.contenido || entrada);
+    case ESTADOS_FLUJO.CREAR_SOLICITUD:
+      return manejarCrearSolicitud(conversacion, paciente, mensaje);
     case ESTADOS_FLUJO.CONFIRMAR:
       return manejarConfirmacion(conversacion, paciente, entrada, seleccion);
     case ESTADOS_FLUJO.CANCELAR_CITA:

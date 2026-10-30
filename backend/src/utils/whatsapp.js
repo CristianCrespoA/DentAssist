@@ -73,6 +73,7 @@ const ESTADOS_FLUJO = {
   REPROGRAMAR_CITA: 'reprogramar_cita',
   REPROGRAMAR_FECHA: 'reprogramar_fecha',
   REPROGRAMAR_HORA: 'reprogramar_hora',
+  CREAR_SOLICITUD: 'crear_solicitud',
   ACTUALIZAR_NOMBRE: 'actualizar_nombre',
   ACTUALIZAR_APELLIDO: 'actualizar_apellido',
   ACTUALIZAR_CORREO: 'actualizar_correo',

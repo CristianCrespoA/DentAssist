@@ -391,7 +391,7 @@ const notificarResolucion = async (solicitud) => {
       return null;
     }
 
-    const contenido = mensajeResolucion(solicitud);
+    const contenido = `Tu solicitud #${solicitud.id} se resolvió.`;
     const mensaje = await whatsappSalientes.enviarYGuardar({
       conversacion,
       contenido,
@@ -488,7 +488,7 @@ const cambiarEstadoSolicitud = async (id, datos, usuario) => {
         if (solicitud && solicitud.origen === 'whatsapp') {
           const conversacion = await conversacionDeSolicitud(solicitud);
           if (conversacion) {
-            await whatsappSalientes.enviarYGuardar({ conversacion, contenido: mensajeResolucionExtra, textoPlano: mensajeResolucionExtra });
+            await whatsappSalientes.enviarYGuardar({ conversacion, contenido: `Tu solicitud #${solicitud.id} se resolvió.\n\n${mensajeResolucionExtra}`, textoPlano: `Tu solicitud #${solicitud.id} se resolvió.\n\n${mensajeResolucionExtra}` });
           }
         }
       } catch (e) {}
