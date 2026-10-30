@@ -24,9 +24,8 @@ const ESTADOS_QUE_OCUPAN = {
 const incluirRelaciones = [
   { model: db.Paciente, as: 'paciente', attributes: ['id', 'nombre', 'apellido', 'telefono'] },
   { model: db.Profesional, as: 'profesional', attributes: ['id', 'nombre', 'apellido', 'especialidad'] },
-  { model: db.Servicio, as: 'servicio', attributes: ['id', 'nombre', 'duracionMinutos', 'precio'] },
-  db.Usuario ? { model: db.Usuario, as: 'creador', attributes: ['id', 'nombre', 'email', 'rol'] } : null
-].filter(Boolean);
+  { model: db.Servicio, as: 'servicio', attributes: ['id', 'nombre', 'duracionMinutos', 'precio'] }
+];
 
 const esEnteroPositivo = (valor) => {
   const numero = Number(valor);
