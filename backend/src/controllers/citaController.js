@@ -6,6 +6,7 @@ const crear = async (req, res) => {
     const cita = await citaService.crearCita(req.body, req.usuario);
     return res.status(201).json(cita);
   } catch (error) {
+    console.error('ERR_CREAR_CITA:', error?.message);
     return manejarError(res, error);
   }
 };
