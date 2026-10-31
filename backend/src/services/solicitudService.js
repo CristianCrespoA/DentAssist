@@ -107,7 +107,12 @@ const obtenerSolicitud = async (id) => {
   try {
     const solicitudId = parsearEnteroPositivo(id, 'id', { obligatorio: true });
 
-    const solicitud = await db.Solicitud.findByPk(solicitudId);
+    let solicitud = null;
+    try {
+      solicitud = await db.Solicitud.findByPk(solicitudId, { include: incluirDetalle });
+    } catch (e) {
+      solicitud = await db.Solicitud.findByPk(solicitudId);
+    }
     if (!solicitud) {
       throw errorNegocio(`La solicitud ${solicitudId} no existe`, 404);
     }
