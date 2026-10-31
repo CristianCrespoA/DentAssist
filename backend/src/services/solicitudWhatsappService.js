@@ -251,11 +251,36 @@ const registrarEscalamiento = async ({ conversacion, paciente, mensaje }) => {
   });
 };
 
+const crearSolicitudDesdeWhatsApp = async ({ conversacion, paciente, mensaje }) => {
+  const contenido = typeof mensaje === 'string' ? mensaje.trim() : String(mensaje || '').trim();
+
+  if (!contenido) {
+    const error = new Error('El mensaje es requerido');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const solicitud = await db.Solicitud.create({
+    pacienteId: paciente?.id ?? conversacion?.pacienteId ?? null,
+    conversacionId: conversacion?.id ?? null,
+    servicioId: null,
+    citaId: null,
+    mensaje: contenido,
+    tipo: 'consulta',
+    estado: 'pendiente',
+    origen: 'whatsapp',
+    fechaSolicitud: new Date()
+  });
+
+  return solicitud;
+};
+
 module.exports = {
   MAX_CITAS,
   VENTANA_AGRUPACION_MS,
   buscarSolicitudAbierta,
   crearSolicitudCita,
+  crearSolicitudDesdeWhatsApp,
   listarCitasFuturas,
   obtenerCitaFutura,
   registrarEscalamiento
