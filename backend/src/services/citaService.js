@@ -217,6 +217,13 @@ const crearCita = async (datos, usuario = null) => {
       return cita.get ? cita.get({ plain: true }) : cita;
     }
   } catch (error) {
+    console.error('CREAR_CITA_ERR:', error?.name, error?.message);
+    if (error?.parent) {
+      console.error('CREAR_CITA_PARENT:', error.parent?.code, error.parent?.sqlMessage);
+    }
+    if (error?.original) {
+      console.error('CREAR_CITA_ORIGINAL:', error.original?.code, error.original?.sqlMessage);
+    }
     throw error;
   }
 };
