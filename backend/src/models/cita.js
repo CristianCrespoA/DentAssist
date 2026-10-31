@@ -20,8 +20,7 @@ module.exports = (sequelize, DataTypes) => {
     fecha: DataTypes.DATEONLY,
     hora: DataTypes.TIME,
     estado: DataTypes.ENUM('programada', 'confirmada', 'atendida', 'cancelada', 'no_asistio'),
-    observaciones: DataTypes.TEXT,
-    creadoPor: DataTypes.INTEGER
+    observaciones: DataTypes.TEXT
   }, {
     sequelize,
     modelName: 'Cita',

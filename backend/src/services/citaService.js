@@ -207,8 +207,7 @@ const crearCita = async (datos, usuario = null) => {
       fecha: datos.fecha,
       hora: datos.hora,
       estado: (datos && datos.estado) || 'programada',
-      observaciones: usuario ? (obs ? `${obs} | Asignada por: ${usuario.nombre || usuario.email} (id:${usuario.id})` : `Asignada por: ${usuario.nombre || usuario.email} (id:${usuario.id})`) : obs,
-      creadoPor: usuario?.id || null
+      observaciones: usuario ? (obs ? `${obs} | Asignada por: ${usuario.nombre || usuario.email} (id:${usuario.id})` : `Asignada por: ${usuario.nombre || usuario.email} (id:${usuario.id})`) : obs
     });
 
     try {
