@@ -175,10 +175,10 @@ const obtenerCita = async (id) => {
 
 const crearCita = async (datos, usuario = null) => {
   try {
-    validarCampos(datos);
+    validarCampos(datos || {});
 
-    const servicio = await asegurarReferencias(datos);
-    const duracionMinutos = Number(servicio.duracionMinutos) || DURACION_POR_DEFECTO;
+    const servicio = await asegurarReferencias(datos || {});
+    const duracionMinutos = Number(servicio?.duracionMinutos) || DURACION_POR_DEFECTO;
 
     await validarHorarioCita({
       fecha: datos.fecha,
@@ -186,7 +186,7 @@ const crearCita = async (datos, usuario = null) => {
       duracionMinutos
     });
 
-    const ocupaHorario = estadoOcupaHorario(datos.estado || 'programada');
+    const ocupaHorario = estadoOcupaHorario((datos && datos.estado) || 'programada');
 
     if (ocupaHorario) {
       await buscarCruce({
@@ -198,15 +198,15 @@ const crearCita = async (datos, usuario = null) => {
       });
     }
 
-    const obs = datos.observaciones || null;
+    const obs = (datos && datos.observaciones) || null;
     const cita = await db.Cita.create({
       pacienteId: normalizarEntero(datos.pacienteId),
       profesionalId: normalizarEntero(datos.profesionalId),
       servicioId: normalizarEntero(datos.servicioId),
-      solicitudId: normalizarOpcional(datos.solicitudId),
+      solicitudId: normalizarOpcional(datos && datos.solicitudId),
       fecha: datos.fecha,
       hora: datos.hora,
-      estado: datos.estado || 'programada',
+      estado: (datos && datos.estado) || 'programada',
       observaciones: usuario ? (obs ? `${obs} | Asignada por: ${usuario.nombre || usuario.email} (id:${usuario.id})` : `Asignada por: ${usuario.nombre || usuario.email} (id:${usuario.id})`) : obs,
       creadoPor: usuario?.id || null
     });
