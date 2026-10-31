@@ -1399,7 +1399,8 @@ const procesar = async ({ conversacion, paciente, mensaje, seleccion = null }) =
   const entrada = normalizar(mensaje?.contenido);
 
   if (conversacion.estadoFlujo === ESTADOS_FLUJO.HUMANO) {
-    return mostrarMenu(conversacion, { saludo: false, encabezado: 'El chat con humano ya no está disponible. Usa el menú.' });
+    await conversacion.update({ estadoFlujo: ESTADOS_FLUJO.MENU });
+    return mostrarMenu(conversacion, { saludo: false });
   }
 
   const comando = detectarComando(entrada, seleccion);
