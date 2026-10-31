@@ -174,46 +174,50 @@ const obtenerCita = async (id) => {
 };
 
 const crearCita = async (datos, usuario = null) => {
-  validarCampos(datos);
+  try {
+    validarCampos(datos);
 
-  const servicio = await asegurarReferencias(datos);
-  const duracionMinutos = Number(servicio.duracionMinutos) || DURACION_POR_DEFECTO;
+    const servicio = await asegurarReferencias(datos);
+    const duracionMinutos = Number(servicio.duracionMinutos) || DURACION_POR_DEFECTO;
 
-  await validarHorarioCita({
-    fecha: datos.fecha,
-    hora: datos.hora,
-    duracionMinutos
-  });
-
-  const ocupaHorario = estadoOcupaHorario(datos.estado || 'programada');
-
-  if (ocupaHorario) {
-    await buscarCruce({
-      pacienteId: normalizarEntero(datos.pacienteId),
-      profesionalId: normalizarEntero(datos.profesionalId),
+    await validarHorarioCita({
       fecha: datos.fecha,
       hora: datos.hora,
       duracionMinutos
     });
-  }
 
-  const obs = datos.observaciones || null;
-  const cita = await db.Cita.create({
-    pacienteId: normalizarEntero(datos.pacienteId),
-    profesionalId: normalizarEntero(datos.profesionalId),
-    servicioId: normalizarEntero(datos.servicioId),
-    solicitudId: normalizarOpcional(datos.solicitudId),
-    fecha: datos.fecha,
-    hora: datos.hora,
-    estado: datos.estado || 'programada',
-    observaciones: usuario ? (obs ? `${obs} | Asignada por: ${usuario.nombre || usuario.email} (id:${usuario.id})` : `Asignada por: ${usuario.nombre || usuario.email} (id:${usuario.id})`) : obs,
-    creadoPor: usuario?.id || null
-  });
+    const ocupaHorario = estadoOcupaHorario(datos.estado || 'programada');
 
-  try {
-    return await obtenerCita(cita.id);
-  } catch (e) {
-    return cita.get ? cita.get({ plain: true }) : cita;
+    if (ocupaHorario) {
+      await buscarCruce({
+        pacienteId: normalizarEntero(datos.pacienteId),
+        profesionalId: normalizarEntero(datos.profesionalId),
+        fecha: datos.fecha,
+        hora: datos.hora,
+        duracionMinutos
+      });
+    }
+
+    const obs = datos.observaciones || null;
+    const cita = await db.Cita.create({
+      pacienteId: normalizarEntero(datos.pacienteId),
+      profesionalId: normalizarEntero(datos.profesionalId),
+      servicioId: normalizarEntero(datos.servicioId),
+      solicitudId: normalizarOpcional(datos.solicitudId),
+      fecha: datos.fecha,
+      hora: datos.hora,
+      estado: datos.estado || 'programada',
+      observaciones: usuario ? (obs ? `${obs} | Asignada por: ${usuario.nombre || usuario.email} (id:${usuario.id})` : `Asignada por: ${usuario.nombre || usuario.email} (id:${usuario.id})`) : obs,
+      creadoPor: usuario?.id || null
+    });
+
+    try {
+      return await obtenerCita(cita.id);
+    } catch (e) {
+      return cita.get ? cita.get({ plain: true }) : cita;
+    }
+  } catch (error) {
+    throw error;
   }
 };
 

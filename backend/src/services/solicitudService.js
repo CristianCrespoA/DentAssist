@@ -119,7 +119,32 @@ const obtenerSolicitud = async (id) => {
       plain = {};
     }
 
-    try { if (plain.pacienteId) { const p = await db.Paciente.findByPk(plain.pacienteId); plain.paciente = p ? (p.get ? p.get({ plain: true }) : p) : null; } else plain.paciente = null; } catch (e) { console.error('SP', e.message); plain.paciente = null; }
+    try {
+      if (plain.pacienteId) {
+        const p = await db.Paciente.findByPk(plain.pacienteId);
+        plain.paciente = p ? (p.get ? p.get({ plain: true }) : p) : null;
+      } else {
+        plain.paciente = null;
+      }
+      if (!plain.paciente && plain.conversacionId) {
+        try {
+          const cv = await db.Conversacion.findByPk(plain.conversacionId);
+          if (cv?.pacienteId) {
+            const p2 = await db.Paciente.findByPk(cv.pacienteId);
+            if (p2) plain.paciente = p2.get ? p2.get({ plain: true }) : p2;
+          }
+          if (!plain.paciente) {
+            try {
+              const cv2 = await db.Conversacion.findByPk(plain.conversacionId, { include: [{ model: db.Paciente, as: 'paciente', required: false }] });
+              if (cv2?.paciente) plain.paciente = cv2.paciente.get ? cv2.paciente.get({ plain: true }) : cv2.paciente;
+            } catch (e3) {}
+          }
+        } catch (e2) {}
+      }
+    } catch (e) {
+      console.error('SP', e.message);
+      plain.paciente = plain.paciente || null;
+    }
     try { if (plain.servicioId) { const s = await db.Servicio.findByPk(plain.servicioId); plain.servicio = s ? (s.get ? s.get({ plain: true }) : s) : null; } else plain.servicio = null; } catch (e) { console.error('SS', e.message); plain.servicio = null; }
     try { if (plain.citaId) { const c = await db.Cita.findByPk(plain.citaId); if (c) { const pc = c.get ? c.get({ plain: true }) : c; try { if (pc.profesionalId) { const pr = await db.Profesional.findByPk(pc.profesionalId); if (pr) pc.profesional = pr.get ? pr.get({ plain: true }) : pr; } } catch (e2) { console.error('SPR', e2.message); } plain.cita = pc; } else plain.cita = null; } else plain.cita = null; } catch (e) { console.error('SC', e.message); plain.cita = null; }
     try { if (plain.conversacionId) { const cv = await db.Conversacion.findByPk(plain.conversacionId); plain.conversacion = cv ? (cv.get ? cv.get({ plain: true }) : cv) : null; if (plain.conversacion) { try { const ms = await db.Mensaje.findAll({ where: { conversacionId: plain.conversacion.id }, order: [['ocurridoEn', 'ASC'], ['createdAt', 'ASC']] }); plain.conversacion.mensajes = ms.map(m => (m.get ? m.get({ plain: true }) : m)); } catch (e2) { console.error('SM', e2.message); plain.conversacion.mensajes = []; } } } else plain.conversacion = null; } catch (e) { console.error('SCV', e.message); plain.conversacion = null; }
