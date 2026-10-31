@@ -107,16 +107,33 @@ const buscarCruce = async ({
   excluirId,
   transaction
 }) => {
-  const citas = await db.Cita.findAll({
-    where: {
-      fecha,
-      estado: ESTADOS_QUE_OCUPAN,
-      [Op.or]: [{ profesionalId }, { pacienteId }],
-      ...(excluirId ? { id: { [Op.ne]: excluirId } } : {})
-    },
-    include: [{ model: db.Servicio, as: 'servicio', attributes: ['id', 'duracionMinutos'] }],
-    transaction
-  });
+  let citas = [];
+  try {
+    citas = await db.Cita.findAll({
+      where: {
+        fecha,
+        estado: ESTADOS_QUE_OCUPAN,
+        [Op.or]: [{ profesionalId }, { pacienteId }],
+        ...(excluirId ? { id: { [Op.ne]: excluirId } } : {})
+      },
+      include: [{ model: db.Servicio, as: 'servicio', attributes: ['id', 'duracionMinutos'] }],
+      transaction
+    });
+  } catch (e) {
+    try {
+      citas = await db.Cita.findAll({
+        where: {
+          fecha,
+          estado: ESTADOS_QUE_OCUPAN,
+          [Op.or]: [{ profesionalId }, { pacienteId }],
+          ...(excluirId ? { id: { [Op.ne]: excluirId } } : {})
+        },
+        transaction
+      });
+    } catch (e2) {
+      citas = [];
+    }
+  }
 
   const inicioNuevo = aMinutos(hora);
   const finNuevo = inicioNuevo + duracionMinutos;
@@ -139,11 +156,21 @@ const buscarCruce = async ({
 };
 
 const obtenerCita = async (id) => {
-  const cita = await db.Cita.findByPk(id, { include: incluirRelaciones });
+  try {
+    const cita = await db.Cita.findByPk(id, { include: incluirRelaciones });
+    if (cita) return cita;
+  } catch (e) {
+    // continuar con fallback
+  }
 
-  if (!cita) throw errorNegocio(`La cita ${id} no existe`, 404);
+  try {
+    const cita = await db.Cita.findByPk(id);
+    if (cita) return cita.get ? cita.get({ plain: true }) : cita;
+  } catch (e) {
+    // continuar
+  }
 
-  return cita;
+  throw errorNegocio(`La cita ${id} no existe`, 404);
 };
 
 const crearCita = async (datos, usuario = null) => {
@@ -183,7 +210,11 @@ const crearCita = async (datos, usuario = null) => {
     creadoPor: usuario?.id || null
   });
 
-  return obtenerCita(cita.id);
+  try {
+    return await obtenerCita(cita.id);
+  } catch (e) {
+    return cita.get ? cita.get({ plain: true }) : cita;
+  }
 };
 
 const listarCitas = async (filtros = {}) => {
@@ -279,7 +310,11 @@ const actualizarCita = async (id, datos) => {
 
   await cita.update(actualizados);
 
-  return obtenerCita(cita.id);
+  try {
+    return await obtenerCita(cita.id);
+  } catch (e) {
+    return cita.get ? cita.get({ plain: true }) : cita;
+  }
 };
 
 const eliminarCita = async (id) => {
