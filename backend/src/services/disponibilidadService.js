@@ -19,37 +19,74 @@ const {
 } = require('./agendaService');
 
 const asegurarReferencias = async (profesionalId, servicioId) => {
-  const [profesional, servicio] = await Promise.all([
-    db.Profesional.findByPk(profesionalId),
-    db.Servicio.findByPk(servicioId)
-  ]);
+  try {
+    const [profesional, servicio] = await Promise.all([
+      db.Profesional.findByPk(profesionalId),
+      db.Servicio.findByPk(servicioId)
+    ]);
 
-  if (!profesional) {
-    throw errorNegocio(`El profesional ${profesionalId} no existe`, 404);
+    if (!profesional) {
+      throw errorNegocio(`El profesional ${profesionalId} no existe`, 404);
+    }
+
+    if (!servicio) {
+      throw errorNegocio(`El servicio ${servicioId} no existe`, 404);
+    }
+
+    return { profesional, servicio };
+  } catch (error) {
+    if (error?.nombre === 'errorNegocio' || error?.status) {
+      throw error;
+    }
+    // Fallback defensivo
+    try {
+      const profesional = await db.Profesional.findByPk(profesionalId);
+      const servicio = await db.Servicio.findByPk(servicioId);
+      if (!profesional) throw errorNegocio(`El profesional ${profesionalId} no existe`, 404);
+      if (!servicio) throw errorNegocio(`El servicio ${servicioId} no existe`, 404);
+      return { profesional, servicio };
+    } catch (e) {
+      if (e?.nombre === 'errorNegocio' || e?.status) throw e;
+      throw errorNegocio('No se pudo validar el profesional o el servicio', 400);
+    }
   }
-
-  if (!servicio) {
-    throw errorNegocio(`El servicio ${servicioId} no existe`, 404);
-  }
-
-  return { profesional, servicio };
 };
 
 const obtenerBloqueosDelProfesional = async (profesionalId, fecha) => {
-  const citas = await db.Cita.findAll({
-    where: {
-      profesionalId,
-      fecha,
-      estado: { [Op.notIn]: ESTADOS_SIN_OCUPAR }
-    },
-    include: [{ model: db.Servicio, as: 'servicio', attributes: ['id', 'duracionMinutos'] }]
-  });
+  let citas = [];
+  try {
+    citas = await db.Cita.findAll({
+      where: {
+        profesionalId,
+        fecha,
+        estado: { [Op.notIn]: ESTADOS_SIN_OCUPAR }
+      },
+      include: [{ model: db.Servicio, as: 'servicio', attributes: ['id', 'duracionMinutos'] }]
+    });
+  } catch (e) {
+    try {
+      citas = await db.Cita.findAll({
+        where: {
+          profesionalId,
+          fecha,
+          estado: { [Op.notIn]: ESTADOS_SIN_OCUPAR }
+        }
+      });
+    } catch (e2) {
+      citas = [];
+    }
+  }
 
   return citas.map((cita) => {
-    const inicio = aMinutos(cita.hora);
-    const duracion = Number(cita.servicio?.duracionMinutos) || DURACION_POR_DEFECTO;
+    const c = cita.get ? cita.get({ plain: true }) : cita;
+    const inicio = aMinutos(c.hora);
+    let duracion = DURACION_POR_DEFECTO;
+    if (c.servicio?.duracionMinutos) {
+      duracion = Number(c.servicio.duracionMinutos) || DURACION_POR_DEFECTO;
+    }
+    if (inicio === null) return null;
     return { inicio, fin: inicio + duracion };
-  });
+  }).filter(Boolean);
 };
 
 const obtenerDisponibilidad = async ({ fecha, profesionalId, servicioId }) => {
@@ -63,7 +100,7 @@ const obtenerDisponibilidad = async ({ fecha, profesionalId, servicioId }) => {
   });
 
   const { servicio } = await asegurarReferencias(profesionalValidado, servicioValidado);
-  const duracionMinutos = Number(servicio.duracionMinutos) || DURACION_POR_DEFECTO;
+  const duracionMinutos = Number(servicio?.duracionMinutos) || DURACION_POR_DEFECTO;
 
   const diaSemana = obtenerDiaSemana(fecha);
   const rangos = await obtenerRangosDelDia(diaSemana);
@@ -78,15 +115,26 @@ const obtenerDisponibilidad = async ({ fecha, profesionalId, servicioId }) => {
     };
   }
 
-  const bloqueos = await obtenerBloqueosDelProfesional(profesionalValidado, fecha);
+  let bloqueos = [];
+  try {
+    bloqueos = await obtenerBloqueosDelProfesional(profesionalValidado, fecha);
+  } catch (e) {
+    bloqueos = [];
+  }
+
   const ahora = fecha === fechaHoyBogota() ? aMinutos(horaActualBogota()) : null;
 
-  const franjas = generarFranjas({
-    rangos,
-    duracionMinutos,
-    bloqueos,
-    ahora
-  });
+  let franjas = [];
+  try {
+    franjas = generarFranjas({
+      rangos,
+      duracionMinutos,
+      bloqueos,
+      ahora
+    });
+  } catch (e) {
+    franjas = [];
+  }
 
   return {
     fecha,
