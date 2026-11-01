@@ -211,9 +211,30 @@ const crearCita = async (datos, usuario = null) => {
     });
 
     try {
-      return await obtenerCita(cita.id);
+      const completa = await obtenerCita(cita.id);
+      return completa;
     } catch (e) {
-      return cita.get ? cita.get({ plain: true }) : cita;
+      try {
+        const c = await db.Cita.findByPk(cita.id);
+        const base = c ? (c.get ? c.get({ plain: true }) : c) : (cita.get ? cita.get({ plain: true }) : cita);
+        try {
+          if (base.pacienteId) {
+            const p = await db.Paciente.findByPk(base.pacienteId);
+            if (p) base.paciente = p.get ? p.get({ plain: true }) : p;
+          }
+          if (base.profesionalId) {
+            const pr = await db.Profesional.findByPk(base.profesionalId);
+            if (pr) base.profesional = pr.get ? pr.get({ plain: true }) : pr;
+          }
+          if (base.servicioId) {
+            const s = await db.Servicio.findByPk(base.servicioId);
+            if (s) base.servicio = s.get ? s.get({ plain: true }) : s;
+          }
+        } catch (e2) {}
+        return base;
+      } catch (e2) {
+        return cita.get ? cita.get({ plain: true }) : cita;
+      }
     }
   } catch (error) {
     console.error('CREAR_CITA_ERR:', error?.name, error?.message);
