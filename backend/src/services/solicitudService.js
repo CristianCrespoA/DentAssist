@@ -408,38 +408,75 @@ const mensajeResolucion = (solicitud) => {
 };
 
 const conversacionDeSolicitud = async (solicitud) => {
+  if (!solicitud) return null;
+
+  if (solicitud.conversacion && solicitud.conversacion.id) {
+    return solicitud.conversacion;
+  }
+
   if (solicitud.conversacionId) {
-    return db.Conversacion.findByPk(solicitud.conversacionId);
+    try {
+      const c = await db.Conversacion.findByPk(solicitud.conversacionId);
+      if (c) return c;
+    } catch (e) {}
   }
 
   if (!solicitud.pacienteId) return null;
 
-  return db.Conversacion.findOne({
-    where: { pacienteId: solicitud.pacienteId },
-    order: [['ultimaActividad', 'DESC'], ['id', 'DESC']]
-  });
+  try {
+    return await db.Conversacion.findOne({
+      where: { pacienteId: solicitud.pacienteId },
+      order: [['ultimaActividad', 'DESC'], ['id', 'DESC']]
+    });
+  } catch (e) {
+    return null;
+  }
 };
 
 /**
- * Avisa al paciente que su solicitud fue resuelta. Solo aplica a solicitudes
- * originadas en WhatsApp. Si la ventana de 24 h está cerrada, el saliente queda
- * registrado como fallido y marcado para enviarse con plantilla. Un fallo del
- * aviso nunca revierte la resolución.
+ * Avisa al paciente que su solicitud fue resuelta.
  */
 const notificarResolucion = async (solicitud) => {
   try {
-    if (!solicitud || (solicitud.origen !== 'whatsapp' && !solicitud.conversacionId)) {
-      return null;
+    let s = solicitud || null;
+
+    if (s && s.id) {
+      if (!s.conversacionId || !s.pacienteId) {
+        try {
+          const full = await db.Solicitud.findByPk(s.id);
+          if (full) {
+            const plain = full.get ? full.get({ plain: true }) : full;
+            s = { ...plain, ...s };
+          }
+        } catch (e) {}
+      }
     }
 
-    const conversacion = await conversacionDeSolicitud(solicitud);
+    if (!s) return null;
+
+    let conversacion = await conversacionDeSolicitud(s);
+
+    if (!conversacion && s.pacienteId) {
+      try {
+        conversacion = await db.Conversacion.findOne({
+          where: { pacienteId: s.pacienteId },
+          order: [['ultimaActividad', 'DESC'], ['id', 'DESC']]
+        });
+      } catch (e) {}
+    }
+
+    if (!conversacion && s.conversacionId) {
+      try {
+        conversacion = await db.Conversacion.findByPk(s.conversacionId);
+      } catch (e) {}
+    }
 
     if (!conversacion) {
-      registrar('resolucion_sin_conversacion', { solicitudId: solicitud.id });
+      registrar('resolucion_sin_conversacion', { solicitudId: s.id });
       return null;
     }
 
-    const contenido = `Tu solicitud #${solicitud.id} se resolvió.`;
+    const contenido = `Tu solicitud #${s.id} se resolvió.`;
     const mensaje = await whatsappSalientes.enviarYGuardar({
       conversacion,
       contenido,
@@ -447,7 +484,7 @@ const notificarResolucion = async (solicitud) => {
     });
 
     registrar('resolucion_notificada', {
-      solicitudId: solicitud.id,
+      solicitudId: s.id,
       mensajeId: mensaje?.id,
       estado: mensaje?.estado
     });
