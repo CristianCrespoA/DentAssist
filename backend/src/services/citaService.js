@@ -249,70 +249,90 @@ const crearCita = async (datos, usuario = null) => {
 };
 
 const listarCitas = async (filtros = {}) => {
-  const where = {};
-
-  if (filtros.fecha) {
-    if (!esFechaValida(filtros.fecha)) {
-      throw errorNegocio('El filtro fecha debe tener el formato YYYY-MM-DD y ser válido');
-    }
-    where.fecha = filtros.fecha;
-  }
-
-  for (const campo of ['pacienteId', 'profesionalId']) {
-    if (filtros[campo]) {
-      if (!esEnteroPositivo(filtros[campo])) {
-        throw errorNegocio(`El filtro ${campo} debe ser un entero positivo`);
-      }
-      where[campo] = normalizarEntero(filtros[campo]);
-    }
-  }
-
-  if (filtros.estado) {
-    if (!ESTADOS.includes(filtros.estado)) {
-      throw errorNegocio(`Estado inválido. Valores permitidos: ${ESTADOS.join(', ')}`);
-    }
-    where.estado = filtros.estado;
-  }
-
-  let citas = [];
   try {
-    citas = await db.Cita.findAll({
-      where,
-      order: [['fecha', 'ASC'], ['hora', 'ASC']],
-      raw: true
-    });
-  } catch (e) {
-    try {
-      citas = await db.Cita.findAll({
-        where,
-        order: [['fecha', 'ASC'], ['hora', 'ASC']]
-      }).then((r) => (Array.isArray(r) ? r.map((x) => (x.get ? x.get({ plain: true }) : x)) : []));
-    } catch (e2) {
-      citas = [];
+    const replacements = {};
+    const condiciones = [];
+
+    if (filtros.fecha) {
+      if (!esFechaValida(filtros.fecha)) {
+        throw errorNegocio('El filtro fecha debe tener el formato YYYY-MM-DD y ser válido');
+      }
+      condiciones.push('fecha = :fecha');
+      replacements.fecha = filtros.fecha;
     }
+
+    if (filtros.pacienteId) {
+      if (!esEnteroPositivo(filtros.pacienteId)) {
+        throw errorNegocio('El filtro pacienteId debe ser un entero positivo');
+      }
+      condiciones.push('pacienteId = :pacienteId');
+      replacements.pacienteId = normalizarEntero(filtros.pacienteId);
+    }
+
+    if (filtros.profesionalId) {
+      if (!esEnteroPositivo(filtros.profesionalId)) {
+        throw errorNegocio('El filtro profesionalId debe ser un entero positivo');
+      }
+      condiciones.push('profesionalId = :profesionalId');
+      replacements.profesionalId = normalizarEntero(filtros.profesionalId);
+    }
+
+    if (filtros.estado) {
+      if (!ESTADOS.includes(filtros.estado)) {
+        throw errorNegocio(`Estado inválido. Valores permitidos: ${ESTADOS.join(', ')}`);
+      }
+      condiciones.push('estado = :estado');
+      replacements.estado = filtros.estado;
+    }
+
+    let sql = 'SELECT * FROM Citas';
+    if (condiciones.length) {
+      sql += ' WHERE ' + condiciones.join(' AND ');
+    }
+    sql += ' ORDER BY fecha ASC, hora ASC';
+
+    const [rows] = await db.sequelize.query(sql, {
+      replacements,
+      type: db.Sequelize.QueryTypes.SELECT
+    });
+
+    const citas = Array.isArray(rows) ? rows : [];
+
+    for (let i = 0; i < citas.length; i++) {
+      const c = citas[i];
+      try {
+        if (c.pacienteId && !c.paciente) {
+          const [pRows] = await db.sequelize.query('SELECT * FROM Pacientes WHERE id = :id LIMIT 1', {
+            replacements: { id: c.pacienteId },
+            type: db.Sequelize.QueryTypes.SELECT
+          });
+          if (Array.isArray(pRows) && pRows[0]) c.paciente = pRows[0];
+          else if (pRows && !Array.isArray(pRows)) c.paciente = pRows;
+        }
+        if (c.profesionalId && !c.profesional) {
+          const [prRows] = await db.sequelize.query('SELECT * FROM Profesionales WHERE id = :id LIMIT 1', {
+            replacements: { id: c.profesionalId },
+            type: db.Sequelize.QueryTypes.SELECT
+          });
+          if (Array.isArray(prRows) && prRows[0]) c.profesional = prRows[0];
+          else if (prRows && !Array.isArray(prRows)) c.profesional = prRows;
+        }
+        if (c.servicioId && !c.servicio) {
+          const [sRows] = await db.sequelize.query('SELECT * FROM Servicios WHERE id = :id LIMIT 1', {
+            replacements: { id: c.servicioId },
+            type: db.Sequelize.QueryTypes.SELECT
+          });
+          if (Array.isArray(sRows) && sRows[0]) c.servicio = sRows[0];
+          else if (sRows && !Array.isArray(sRows)) c.servicio = sRows;
+        }
+      } catch (e) {}
+    }
+
+    return citas;
+  } catch (e) {
+    console.error('LISTAR_CITAS_ERR:', e?.message);
+    return [];
   }
-
-  if (!Array.isArray(citas)) citas = [];
-
-  for (let i = 0; i < citas.length; i++) {
-    const c = citas[i];
-    try {
-      if (!c.paciente && c.pacienteId) {
-        const p = await db.Paciente.findByPk(c.pacienteId);
-        if (p) c.paciente = p.get ? p.get({ plain: true }) : p;
-      }
-      if (!c.profesional && c.profesionalId) {
-        const pr = await db.Profesional.findByPk(c.profesionalId);
-        if (pr) c.profesional = pr.get ? pr.get({ plain: true }) : pr;
-      }
-      if (!c.servicio && c.servicioId) {
-        const s = await db.Servicio.findByPk(c.servicioId);
-        if (s) c.servicio = s.get ? s.get({ plain: true }) : s;
-      }
-    } catch (e) {}
-  }
-
-  return citas;
 };
 
 const actualizarCita = async (id, datos) => {
