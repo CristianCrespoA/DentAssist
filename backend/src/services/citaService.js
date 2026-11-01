@@ -279,17 +279,29 @@ const listarCitas = async (filtros = {}) => {
     citas = await db.Cita.findAll({
       where,
       order: [['fecha', 'ASC'], ['hora', 'ASC']],
-      raw: true
+      include: incluirRelaciones
     });
   } catch (e) {
     try {
       citas = await db.Cita.findAll({
         where,
-        order: [['fecha', 'ASC'], ['hora', 'ASC']]
-      }).then((r) => (Array.isArray(r) ? r.map((x) => (x.get ? x.get({ plain: true }) : x)) : []));
+        order: [['fecha', 'ASC'], ['hora', 'ASC']],
+        raw: true
+      });
     } catch (e2) {
-      citas = [];
+      try {
+        citas = await db.Cita.findAll({
+          where,
+          order: [['fecha', 'ASC'], ['hora', 'ASC']]
+        }).then((r) => (Array.isArray(r) ? r.map((x) => (x.get ? x.get({ plain: true }) : x)) : []));
+      } catch (e3) {
+        citas = [];
+      }
     }
+  }
+
+  if (Array.isArray(citas) && citas.length && citas[0] && typeof citas[0].get === 'function') {
+    citas = citas.map((x) => x.get({ plain: true }));
   }
 
   return citas;
