@@ -126,26 +126,44 @@ const obtenerSolicitud = async (id) => {
 
     try {
       if (plain.pacienteId) {
-        const p = await db.Paciente.findByPk(plain.pacienteId);
-        plain.paciente = p ? (p.get ? p.get({ plain: true }) : p) : null;
-      } else {
-        plain.paciente = null;
+        try {
+          const p = await db.Paciente.findByPk(plain.pacienteId);
+          if (p) plain.paciente = p.get ? p.get({ plain: true }) : p;
+        } catch (e) {}
       }
+
       if (!plain.paciente && plain.conversacionId) {
         try {
-          const cv = await db.Conversacion.findByPk(plain.conversacionId);
-          if (cv?.pacienteId) {
-            const p2 = await db.Paciente.findByPk(cv.pacienteId);
-            if (p2) plain.paciente = p2.get ? p2.get({ plain: true }) : p2;
+          let cv = null;
+          try {
+            cv = await db.Conversacion.findByPk(plain.conversacionId, { include: [{ model: db.Paciente, as: 'paciente', required: false }] });
+          } catch (e) {
+            cv = await db.Conversacion.findByPk(plain.conversacionId);
           }
-          if (!plain.paciente) {
-            try {
-              const cv2 = await db.Conversacion.findByPk(plain.conversacionId, { include: [{ model: db.Paciente, as: 'paciente', required: false }] });
-              if (cv2?.paciente) plain.paciente = cv2.paciente.get ? cv2.paciente.get({ plain: true }) : cv2.paciente;
-            } catch (e3) {}
+          if (cv) {
+            if (cv.paciente) {
+              plain.paciente = cv.paciente.get ? cv.paciente.get({ plain: true }) : cv.paciente;
+            } else if (cv.pacienteId) {
+              try {
+                const p2 = await db.Paciente.findByPk(cv.pacienteId);
+                if (p2) plain.paciente = p2.get ? p2.get({ plain: true }) : p2;
+              } catch (e2) {}
+            }
+            if (!plain.pacienteId && cv.pacienteId) {
+              plain.pacienteId = cv.pacienteId;
+            }
           }
-        } catch (e2) {}
+        } catch (e) {}
       }
+
+      if (!plain.paciente && plain.pacienteId) {
+        try {
+          const p = await db.Paciente.findByPk(plain.pacienteId);
+          if (p) plain.paciente = p.get ? p.get({ plain: true }) : p;
+        } catch (e) {}
+      }
+
+      if (!plain.paciente) plain.paciente = null;
     } catch (e) {
       console.error('SP', e.message);
       plain.paciente = plain.paciente || null;
