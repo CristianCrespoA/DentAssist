@@ -9,7 +9,6 @@ module.exports = (sequelize, DataTypes) => {
       Cita.belongsTo(models.Profesional, { foreignKey: 'profesionalId', as: 'profesional' });
       Cita.belongsTo(models.Servicio, { foreignKey: 'servicioId', as: 'servicio' });
       Cita.belongsTo(models.Solicitud, { foreignKey: 'solicitudId', as: 'solicitud' });
-      Cita.belongsTo(models.Usuario, { foreignKey: 'creadoPor', as: 'creador' });
     }
   }
   Cita.init({
