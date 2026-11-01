@@ -278,30 +278,36 @@ const listarCitas = async (filtros = {}) => {
   try {
     citas = await db.Cita.findAll({
       where,
-      order: [['fecha', 'ASC'], ['hora', 'ASC']],
-      include: incluirRelaciones
+      order: [['fecha', 'ASC'], ['hora', 'ASC']]
     });
   } catch (e) {
-    try {
-      citas = await db.Cita.findAll({
-        where,
-        order: [['fecha', 'ASC'], ['hora', 'ASC']],
-        raw: true
-      });
-    } catch (e2) {
-      try {
-        citas = await db.Cita.findAll({
-          where,
-          order: [['fecha', 'ASC'], ['hora', 'ASC']]
-        }).then((r) => (Array.isArray(r) ? r.map((x) => (x.get ? x.get({ plain: true }) : x)) : []));
-      } catch (e3) {
-        citas = [];
-      }
-    }
+    citas = [];
   }
 
   if (Array.isArray(citas) && citas.length && citas[0] && typeof citas[0].get === 'function') {
     citas = citas.map((x) => x.get({ plain: true }));
+  } else if (Array.isArray(citas)) {
+    citas = citas;
+  } else {
+    citas = [];
+  }
+
+  for (let i = 0; i < citas.length; i++) {
+    const c = citas[i];
+    try {
+      if (!c.paciente && c.pacienteId) {
+        const p = await db.Paciente.findByPk(c.pacienteId);
+        if (p) c.paciente = p.get ? p.get({ plain: true }) : p;
+      }
+      if (!c.profesional && c.profesionalId) {
+        const pr = await db.Profesional.findByPk(c.profesionalId);
+        if (pr) c.profesional = pr.get ? pr.get({ plain: true }) : pr;
+      }
+      if (!c.servicio && c.servicioId) {
+        const s = await db.Servicio.findByPk(c.servicioId);
+        if (s) c.servicio = s.get ? s.get({ plain: true }) : s;
+      }
+    } catch (e) {}
   }
 
   return citas;
