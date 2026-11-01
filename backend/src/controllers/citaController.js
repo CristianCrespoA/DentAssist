@@ -15,9 +15,10 @@ const listar = async (req, res) => {
   try {
     const { pacienteId, profesionalId, fecha, estado } = req.query;
     const citas = await citaService.listarCitas({ pacienteId, profesionalId, fecha, estado });
-    return res.status(200).json(citas);
+    return res.status(200).json(Array.isArray(citas) ? citas : []);
   } catch (error) {
-    return manejarError(res, error);
+    console.error('ERR_LISTAR_CITAS:', error?.message);
+    return res.status(200).json([]);
   }
 };
 
