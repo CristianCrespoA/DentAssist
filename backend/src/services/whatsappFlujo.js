@@ -201,8 +201,13 @@ const parsearFechaEntrada = (entrada, seleccion) => {
 const esProximosDias = (entrada) =>
   ['proximos dias', 'proximo', 'proximos', 'siguientes dias', 'cualquier dia'].includes(entrada);
 
-const saludoPara = (contexto) => {
-  const nombre = typeof contexto.nombrePerfil === 'string' ? contexto.nombrePerfil.trim() : '';
+const saludoPara = (contexto, paciente) => {
+  let nombre = typeof contexto.nombrePerfil === 'string' ? contexto.nombrePerfil.trim() : '';
+  if ((!nombre || nombre === '') && paciente) {
+    const n = `${paciente.nombre || ''} ${paciente.apellido || ''}`.trim();
+    if (n) nombre = n;
+    else if (paciente.nombre) nombre = paciente.nombre;
+  }
   const primero = nombre.split(/\s+/)[0];
 
   return primero ? `¡Hola, ${primero}!` : '¡Hola!';
@@ -349,12 +354,13 @@ const derivarHumano = async (
   return [texto([encabezado, MENSAJE_HUMANO].filter(Boolean).join('\n\n'))];
 };
 
-const mostrarMenu = async (conversacion, { saludo = true, encabezado = null } = {}) => {
+const mostrarMenu = async (conversacion, { saludo = true, encabezado = null, paciente = null } = {}) => {
   const contexto = leerContexto(conversacion);
+  const pac = paciente || conversacion?.paciente || null;
   const cuerpo = [
     encabezado,
-    saludo ? `${saludoPara(contexto)} Soy el asistente de DentAssist 🦷` : null,
-    encabezado ? null : `${saludoPara(contexto)} ¿Qué necesitas hacer?`
+    saludo ? `${saludoPara(contexto, pac)} Soy el asistente de DentAssist 🦷` : null,
+    encabezado ? null : `${saludoPara(contexto, pac)} ¿Qué necesitas hacer?`
   ]
     .filter(Boolean)
     .join('\n\n');
@@ -1516,7 +1522,7 @@ const procesar = async ({ conversacion, paciente, mensaje, seleccion = null }) =
 
   if (conversacion.estadoFlujo === ESTADOS_FLUJO.HUMANO) {
     await conversacion.update({ estadoFlujo: ESTADOS_FLUJO.MENU });
-    return mostrarMenu(conversacion, { saludo: false });
+    return mostrarMenu(conversacion, { saludo: true, paciente });
   }
 
   const comando = detectarComando(entrada, seleccion);
@@ -1544,13 +1550,13 @@ const procesar = async ({ conversacion, paciente, mensaje, seleccion = null }) =
     });
   }
 
-  if (comando === 'menu') return mostrarMenu(conversacion, { saludo: false });
+  if (comando === 'menu') return mostrarMenu(conversacion, { saludo: true, paciente });
 
   switch (conversacion.estadoFlujo) {
     case ESTADOS_FLUJO.INICIAL:
     case ESTADOS_FLUJO.AVISO_ENVIADO:
     case ESTADOS_FLUJO.INFO_SERVICIOS:
-      return mostrarMenu(conversacion, { saludo: false });
+      return mostrarMenu(conversacion, { saludo: true, paciente });
     case ESTADOS_FLUJO.REGISTRO_NOMBRE:
       if (paciente) {
         await paciente.update({ nombre: mensaje?.contenido?.trim() });
@@ -1570,7 +1576,7 @@ const procesar = async ({ conversacion, paciente, mensaje, seleccion = null }) =
         await paciente.update({ correo: mensaje?.contenido?.trim() });
       }
       await guardar(conversacion, ESTADOS_FLUJO.MENU, { ...LIMPIAR_RESERVA, opciones: FILAS_MENU.map((fila) => fila.id) });
-      return mostrarMenu(conversacion, { saludo: true, encabezado: 'Datos guardados correctamente.' });
+      return mostrarMenu(conversacion, { saludo: true, encabezado: 'Datos guardados correctamente.', paciente });
     case ESTADOS_FLUJO.MENU:
       return manejarMenu(conversacion, paciente, entrada, seleccion, mensaje);
     case ESTADOS_FLUJO.SOLICITAR_SERVICIO:
@@ -1600,9 +1606,9 @@ const procesar = async ({ conversacion, paciente, mensaje, seleccion = null }) =
     case ESTADOS_FLUJO.ACTUALIZAR_CORREO:
       return manejarActualizacionDatos(conversacion, paciente, conversacion.estadoFlujo, mensaje?.contenido || entrada);
     default:
-      return mostrarMenu(conversacion, { saludo: false });
+      return mostrarMenu(conversacion, { saludo: true, paciente });
   }
-  return mostrarMenu(conversacion, { saludo: false });
+  return mostrarMenu(conversacion, { saludo: true, paciente });
 };
 
 const abrirMenu = async (conversacion, opciones = {}) => mostrarMenu(conversacion, opciones);
