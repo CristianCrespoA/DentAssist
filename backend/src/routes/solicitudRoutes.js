@@ -8,5 +8,6 @@ router.use(authMiddleware, roleMiddleware(ROLES_PERSONAL));
 router.get('/', solicitudController.listar);
 router.get('/:id', solicitudController.obtener);
 router.put('/:id/estado', solicitudController.cambiarEstado);
+router.delete('/:id', solicitudController.eliminar);
 
 module.exports = router;

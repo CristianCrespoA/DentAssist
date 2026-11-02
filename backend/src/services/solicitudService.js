@@ -441,15 +441,13 @@ const notificarResolucion = async (solicitud) => {
     let s = solicitud || null;
 
     if (s && s.id) {
-      if (!s.conversacionId || !s.pacienteId) {
-        try {
-          const full = await db.Solicitud.findByPk(s.id);
-          if (full) {
-            const plain = full.get ? full.get({ plain: true }) : full;
-            s = { ...plain, ...s };
-          }
-        } catch (e) {}
-      }
+      try {
+        const full = await db.Solicitud.findByPk(s.id);
+        if (full) {
+          const plain = full.get ? full.get({ plain: true }) : full;
+          s = { ...plain, ...(typeof s === 'object' ? s : {}), ...s };
+        }
+      } catch (e) {}
     }
 
     if (!s) return null;
@@ -476,7 +474,14 @@ const notificarResolucion = async (solicitud) => {
       return null;
     }
 
-    const contenido = `Tu solicitud #${s.id} se resolvió.`;
+    let contenido = `Tu solicitud #${s.id} se resolvió.\n\nTipo: ${s.tipo || ''}`;
+    try {
+      const hist = await db.SolicitudHistorial.findAll({ where: { solicitudId: s.id }, order: [['createdAt', 'DESC'], ['id', 'DESC']] });
+      const h = hist.find(x => (x.estadoNuevo === 'resuelta' || x.comentario));
+      if (h && h.comentario) {
+        contenido = `${contenido}\n\nObservación: ${h.comentario}`;
+      }
+    } catch (e) {}
     const mensaje = await whatsappSalientes.enviarYGuardar({
       conversacion,
       contenido,
@@ -584,10 +589,22 @@ const cambiarEstadoSolicitud = async (id, datos, usuario) => {
   return solicitud;
 };
 
+const eliminarSolicitud = async (id) => {
+  const solicitudId = parsearEnteroPositivo(id, 'id', { obligatorio: true });
+  const solicitud = await db.Solicitud.findByPk(solicitudId);
+  if (!solicitud) throw errorNegocio(`La solicitud ${solicitudId} no existe`, 404);
+  if (solicitud.estado !== 'resuelta') {
+    throw errorNegocio('Solo se pueden eliminar solicitudes resueltas', 409);
+  }
+  await solicitud.destroy();
+  return { ok: true };
+};
+
 module.exports = {
   ESTADOS,
   TIPOS,
   cambiarEstadoSolicitud,
   listarSolicitudes,
-  obtenerSolicitud
+  obtenerSolicitud,
+  eliminarSolicitud
 };

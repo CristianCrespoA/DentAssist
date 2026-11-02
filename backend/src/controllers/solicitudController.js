@@ -41,8 +41,18 @@ const cambiarEstado = async (req, res) => {
   }
 };
 
+const eliminar = async (req, res) => {
+  try {
+    const resultado = await solicitudService.eliminarSolicitud(req.params.id);
+    return res.status(200).json(resultado);
+  } catch (error) {
+    return manejarError(res, error);
+  }
+};
+
 module.exports = {
   listar,
   obtener,
-  cambiarEstado
+  cambiarEstado,
+  eliminar
 };

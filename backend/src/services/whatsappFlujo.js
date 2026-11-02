@@ -438,7 +438,7 @@ const construirPasoHora = async (
   } = {}
 ) => {
   const contexto = leerContexto(conversacion);
-  const { franjas } = await calcularFranjasDelDia({
+  let { franjas } = await calcularFranjasDelDia({
     fecha: contexto.fecha,
     duracionMinutos: contexto.duracionMinutos,
     profesionalId: contexto.profesionalId,
@@ -454,6 +454,27 @@ const construirPasoHora = async (
     return mostrarProximosDias(conversacion, {
       desde: sumarDias(contexto.fecha, 1),
       encabezado: `No quedan cupos para el ${formatearFecha(contexto.fecha)}.`
+    });
+  }
+
+  // Si hay contexto indicando turno, filtrar por mañana/tarde si viene indicado
+  if (contexto.turno === 'manana') {
+    franjas = franjas.filter((f) => {
+      const h = Number((f.hora || '').split(':')[0]);
+      return h < 12;
+    });
+  } else if (contexto.turno === 'tarde') {
+    franjas = franjas.filter((f) => {
+      const h = Number((f.hora || '').split(':')[0]);
+      return h >= 12;
+    });
+  }
+
+  if (!franjas.length) {
+    await guardar(conversacion, estadoFecha, { fecha: null, hora: null });
+    return mostrarProximosDias(conversacion, {
+      desde: sumarDias(contexto.fecha, 1),
+      encabezado: `No hay cupos en ese turno para el ${formatearFecha(contexto.fecha)}.`
     });
   }
 
@@ -474,12 +495,19 @@ const construirPasoHora = async (
   const cuerpo = [
     encabezado,
     `Cupos para el ${formatearFecha(contexto.fecha)} · ${contexto.servicioNombre} (${contexto.duracionMinutos} min).`,
+    contexto.turno ? `Turno: ${contexto.turno === 'manana' ? 'Mañana' : 'Tarde'}` : null,
     'Elige una franja:'
   ]
     .filter(Boolean)
     .join('\n\n');
 
-  return [lista(cuerpo, filas, { etiqueta: 'Ver horarios', seccion: 'Horarios' })];
+  return [
+    lista(cuerpo, filas, { etiqueta: 'Ver horarios', seccion: 'Horarios' }),
+    botones('¿Quieres cambiar el turno o cancelar?', [
+      { id: 'hora:turno', titulo: 'Cambiar turno' },
+      { id: 'menu:volver', titulo: 'Volver al menú' }
+    ])
+  ];
 };
 
 const resumenCita = (contexto) =>
@@ -537,13 +565,19 @@ const iniciarServicio = async (conversacion, modo) => {
 
 const iniciarCrearSolicitud = async (conversacion) => {
   await guardar(conversacion, ESTADOS_FLUJO.CREAR_SOLICITUD, {});
-  return [texto('Escribe tu solicitud o consulta. La enviaremos al equipo de recepción para que te atiendan lo antes posible.')];
+  return [
+    texto('Escribe tu solicitud o consulta. La enviaremos al equipo de recepción para que te atiendan lo antes posible.'),
+    botones('Si deseas cancelar este proceso:', [{ id: 'menu:volver', titulo: 'Volver al menú' }])
+  ];
 };
 
 const manejarCrearSolicitud = async (conversacion, paciente, mensaje) => {
   const contenido = (mensaje?.contenido || '').trim();
   if (!contenido) {
-    return [texto('Por favor escribe tu solicitud para poder enviarla.')];
+    return [
+      texto('Por favor escribe tu solicitud para poder enviarla.'),
+      botones('Si deseas cancelar este proceso:', [{ id: 'menu:volver', titulo: 'Volver al menú' }])
+    ];
   }
 
   try {
@@ -555,31 +589,31 @@ const manejarCrearSolicitud = async (conversacion, paciente, mensaje) => {
 
     await guardar(conversacion, ESTADOS_FLUJO.MENU, { ...LIMPIAR_RESERVA, opciones: FILAS_MENU.map((fila) => fila.id) });
     
-    return [
-      texto(`Solicitud creada correctamente.\n\nSolicitud #${solicitud.id}\n\n${contenido}\n\nLos recepcionistas la atenderán. Te avisaremos por aquí cuando se resuelva.`),
-      lista('Escribe *menú* para volver al menú principal.', FILAS_MENU, { etiqueta: 'Ver opciones', seccion: 'Menú' })
-    ];
+    return mostrarMenu(conversacion, {
+      saludo: true,
+      encabezado: `Solicitud creada correctamente.\n\nSolicitud #${solicitud.id}\n\nLos recepcionistas la atenderán. Te avisaremos por aquí cuando se resuelva.`
+    });
   } catch (error) {
     registrarError('whatsapp_crear_solicitud', error, { conversacionId: conversacion?.id });
     await guardar(conversacion, ESTADOS_FLUJO.MENU, { ...LIMPIAR_RESERVA, opciones: FILAS_MENU.map((fila) => fila.id) });
-    return [texto('Hubo un error al crear tu solicitud. Por favor intenta nuevamente o escribe *menú* para volver.')];
+    return [texto('Hubo un error al crear tu solicitud. Por favor intenta nuevamente.'), lista('Selecciona una opción:', FILAS_MENU, { etiqueta: 'Ver opciones', seccion: 'Menú' })];
   }
 };
 
 const iniciarActualizacionDatos = async (conversacion, paciente) => {
   await guardar(conversacion, ESTADOS_FLUJO.ACTUALIZAR_NOMBRE, {});
-  return [texto('Vamos a actualizar tus datos.\n\n¿Cuál es tu nombre?')];
+  return [texto('Vamos a actualizar tus datos.\n\n¿Cuál es tu nombre?'), botones('Si deseas cancelar:', [{ id: 'menu:volver', titulo: 'Volver al menú' }])];
 };
 
 const manejarActualizacionDatos = async (conversacion, paciente, estado, valor) => {
   const ctx = leerContexto(conversacion);
   if (estado === ESTADOS_FLUJO.ACTUALIZAR_NOMBRE) {
     await guardar(conversacion, ESTADOS_FLUJO.ACTUALIZAR_APELLIDO, { nombreNuevo: valor.trim() });
-    return [texto('¿Cuál es tu apellido?')];
+    return [texto('¿Cuál es tu apellido?'), botones('Si deseas cancelar:', [{ id: 'menu:volver', titulo: 'Volver al menú' }])];
   }
   if (estado === ESTADOS_FLUJO.ACTUALIZAR_APELLIDO) {
     await guardar(conversacion, ESTADOS_FLUJO.ACTUALIZAR_CORREO, { apellidoNuevo: valor.trim() });
-    return [texto('¿Cuál es tu correo electrónico?')];
+    return [texto('¿Cuál es tu correo electrónico?'), botones('Si deseas cancelar:', [{ id: 'menu:volver', titulo: 'Volver al menú' }])];
   }
   if (estado === ESTADOS_FLUJO.ACTUALIZAR_CORREO) {
     try {
@@ -590,7 +624,7 @@ const manejarActualizacionDatos = async (conversacion, paciente, estado, valor) 
       // ignore
     }
     await guardar(conversacion, ESTADOS_FLUJO.MENU, { ...LIMPIAR_RESERVA, opciones: FILAS_MENU.map((fila) => fila.id) });
-    return [texto('Datos actualizados correctamente.\n\nEscribe *menú* para volver.')];
+    return mostrarMenu(conversacion, { saludo: true, encabezado: 'Datos actualizados correctamente.' });
   }
   return mostrarMenu(conversacion, { saludo: false });
 };
@@ -667,7 +701,7 @@ const volverAlMenu = async (conversacion, mensaje) => {
     opciones: FILAS_MENU.map((fila) => fila.id)
   });
 
-  return [texto(mensaje)];
+  return [texto(mensaje), lista('Selecciona una opción:', FILAS_MENU, { etiqueta: 'Ver opciones', seccion: 'Menú' })];
 };
 
 const iniciarGestionCita = async (conversacion, { tipo, encabezado = null }) => {
@@ -679,7 +713,7 @@ const iniciarGestionCita = async (conversacion, { tipo, encabezado = null }) => 
       opciones: FILAS_MENU.map((fila) => fila.id)
     });
 
-    return [texto(MENSAJE_SIN_CITAS)];
+    return [texto(MENSAJE_SIN_CITAS), lista('Selecciona una opción:', FILAS_MENU, { etiqueta: 'Ver opciones', seccion: 'Menú' })];
   }
 
   const filas = filasCitas(citas);
@@ -702,7 +736,10 @@ const iniciarGestionCita = async (conversacion, { tipo, encabezado = null }) => 
     .filter(Boolean)
     .join('\n\n');
 
-  return [lista(cuerpo, filas, { etiqueta: 'Ver citas', seccion: 'Tus citas' })];
+  return [
+    lista(cuerpo, filas, { etiqueta: 'Ver citas', seccion: 'Tus citas' }),
+    botones('Si deseas cancelar:', [{ id: 'menu:volver', titulo: 'Volver al menú' }])
+  ];
 };
 
 const iniciarCancelacion = (conversacion) =>
@@ -782,7 +819,7 @@ const manejarCitaGestion = async (conversacion, paciente, entrada, seleccion) =>
       return volverAlMenu(conversacion, MENSAJE_CITA_NO_DISPONIBLE);
     }
 
-    return volverAlMenu(conversacion, MENSAJE_CANCELACION_PENDIENTE);
+    return mostrarMenu(conversacion, { saludo: true, encabezado: MENSAJE_CANCELACION_PENDIENTE });
   }
 
   await guardar(conversacion, ESTADOS_FLUJO.REPROGRAMAR_FECHA, {
@@ -850,22 +887,48 @@ const manejarReprogramarFecha = async (conversacion, entrada, seleccion) => {
     });
   }
 
-  await guardar(conversacion, ESTADOS_FLUJO.REPROGRAMAR_HORA, { fecha, hora: null });
+  await guardar(conversacion, ESTADOS_FLUJO.REPROGRAMAR_HORA, { fecha, hora: null, turno: null });
 
-  return construirPasoHora(conversacion, {
-    estadoHora: ESTADOS_FLUJO.REPROGRAMAR_HORA,
-    estadoFecha: ESTADOS_FLUJO.REPROGRAMAR_FECHA
-  });
+  return [
+    botones('¿Prefieres horario de mañana o de tarde?', [
+      { id: 'turno:manana', titulo: 'Mañana' },
+      { id: 'turno:tarde', titulo: 'Tarde' },
+      { id: 'turno:ambos', titulo: 'Ambos' },
+      { id: 'menu:volver', titulo: 'Volver al menú' }
+    ])
+  ];
 };
 
 const manejarReprogramarHora = async (conversacion, paciente, entrada, seleccion) => {
   const contexto = leerContexto(conversacion);
   const id = idDe(seleccion, 'hora');
 
+  if (seleccion?.id === 'hora:turno') {
+    await guardar(conversacion, ESTADOS_FLUJO.REPROGRAMAR_HORA, { fecha: contexto.fecha });
+    return [
+      botones('¿Prefieres horario de mañana o de tarde?', [
+        { id: 'turno:manana', titulo: 'Mañana' },
+        { id: 'turno:tarde', titulo: 'Tarde' },
+        { id: 'turno:ambos', titulo: 'Ambos' },
+        { id: 'menu:volver', titulo: 'Volver al menú' }
+      ])
+    ];
+  }
+
+  if (seleccion?.id === 'turno:manana' || seleccion?.id === 'turno:tarde' || seleccion?.id === 'turno:ambos' || entrada === 'manana' || entrada === 'tarde' || entrada === 'ambos') {
+    const turno = seleccion?.id === 'turno:manana' || entrada === 'manana' ? 'manana' : (seleccion?.id === 'turno:tarde' || entrada === 'tarde' ? 'tarde' : null);
+    await guardar(conversacion, ESTADOS_FLUJO.REPROGRAMAR_HORA, { turno });
+    return construirPasoHora(conversacion, {
+      estadoHora: ESTADOS_FLUJO.REPROGRAMAR_HORA,
+      estadoFecha: ESTADOS_FLUJO.REPROGRAMAR_FECHA
+    });
+  }
+
   if (id === 'otro' || esProximosDias(entrada)) {
     await guardar(conversacion, ESTADOS_FLUJO.REPROGRAMAR_FECHA, {
       fecha: null,
-      hora: null
+      hora: null,
+      turno: null
     });
 
     return construirPasoFecha(conversacion, { encabezado: 'Elige otro día.' });
@@ -914,9 +977,12 @@ const manejarReprogramarHora = async (conversacion, paciente, entrada, seleccion
     return volverAlMenu(conversacion, MENSAJE_CITA_NO_DISPONIBLE);
   }
 
-  return volverAlMenu(
+  return mostrarMenu(
     conversacion,
-    `${MENSAJE_REPROGRAMACION_PENDIENTE}\n\nPropuesta: ${formatearFecha(contexto.fecha)} a las ${hora}.`
+    {
+      saludo: true,
+      encabezado: `${MENSAJE_REPROGRAMACION_PENDIENTE}\n\nPropuesta: ${formatearFecha(contexto.fecha)} a las ${hora}.`
+    }
   );
 };
 
@@ -1193,17 +1259,42 @@ const manejarFecha = async (conversacion, entrada, seleccion) => {
     ];
   }
 
-  await guardar(conversacion, ESTADOS_FLUJO.SOLICITAR_HORA, { fecha, hora: null });
+  await guardar(conversacion, ESTADOS_FLUJO.SOLICITAR_HORA, { fecha, hora: null, turno: null });
 
-  return construirPasoHora(conversacion);
+  return [
+    botones('¿Prefieres horario de mañana o de tarde?', [
+      { id: 'turno:manana', titulo: 'Mañana' },
+      { id: 'turno:tarde', titulo: 'Tarde' },
+      { id: 'turno:ambos', titulo: 'Ambos' },
+      { id: 'menu:volver', titulo: 'Volver al menú' }
+    ])
+  ];
 };
 
 const manejarHora = async (conversacion, entrada, seleccion) => {
   const contexto = leerContexto(conversacion);
   const id = idDe(seleccion, 'hora');
 
+  if (seleccion?.id === 'hora:turno') {
+    await guardar(conversacion, ESTADOS_FLUJO.SOLICITAR_HORA, { fecha: contexto.fecha });
+    return [
+      botones('¿Prefieres horario de mañana o de tarde?', [
+        { id: 'turno:manana', titulo: 'Mañana' },
+        { id: 'turno:tarde', titulo: 'Tarde' },
+        { id: 'turno:ambos', titulo: 'Ambos' },
+        { id: 'menu:volver', titulo: 'Volver al menú' }
+      ])
+    ];
+  }
+
+  if (seleccion?.id === 'turno:manana' || seleccion?.id === 'turno:tarde' || seleccion?.id === 'turno:ambos' || entrada === 'manana' || entrada === 'tarde' || entrada === 'ambos') {
+    const turno = seleccion?.id === 'turno:manana' || entrada === 'manana' ? 'manana' : (seleccion?.id === 'turno:tarde' || entrada === 'tarde' ? 'tarde' : null);
+    await guardar(conversacion, ESTADOS_FLUJO.SOLICITAR_HORA, { turno });
+    return construirPasoHora(conversacion);
+  }
+
   if (id === 'otro' || esProximosDias(entrada)) {
-    await guardar(conversacion, ESTADOS_FLUJO.SOLICITAR_FECHA, { fecha: null, hora: null });
+    await guardar(conversacion, ESTADOS_FLUJO.SOLICITAR_FECHA, { fecha: null, hora: null, turno: null });
     return construirPasoFecha(conversacion, { encabezado: 'Elige otro día.' });
   }
 
@@ -1228,15 +1319,24 @@ const manejarHora = async (conversacion, entrada, seleccion) => {
   await guardar(conversacion, ESTADOS_FLUJO.SOLICITAR_DESCRIPCION, {
     hora,
     profesionalId: franja.profesionalId,
-    profesionalNombre: franja.profesionalNombre || contexto.profesionalNombre
+    profesionalNombre: franja.profesimalNombre || franja.profesionalNombre || contexto.profesionalNombre
   });
 
-  return [texto('Describe brevemente el motivo o asunto de tu cita (puedes escribirlo ahora):')];
+  return [
+    texto('Describe brevemente el motivo o asunto de tu cita (puedes escribirlo ahora):'),
+    botones('Si deseas cancelar:', [{ id: 'menu:volver', titulo: 'Volver al menú' }])
+  ];
 };
 
 const manejarDescripcion = async (conversacion, paciente, entrada) => {
   const contexto = leerContexto(conversacion);
-  const descripcion = entrada.trim();
+  const descripcion = (entrada || '').trim();
+  if (!descripcion) {
+    return [
+      texto('Por favor describe el motivo o asunto de tu cita.'),
+      botones('Si deseas cancelar:', [{ id: 'menu:volver', titulo: 'Volver al menú' }])
+    ];
+  }
   await guardar(conversacion, ESTADOS_FLUJO.CONFIRMAR, { descripcion });
   return [salidaConfirmacion({ ...contexto, descripcion })];
 };
@@ -1249,8 +1349,15 @@ const manejarConfirmacion = async (conversacion, paciente, entrada, seleccion) =
     id === 'no' || ['no', 'cambiar', 'otra hora', 'otra franja'].includes(entrada);
 
   if (negativo) {
-    await guardar(conversacion, ESTADOS_FLUJO.SOLICITAR_HORA, { hora: null });
-    return construirPasoHora(conversacion, { encabezado: 'Sin problema, elige otra franja.' });
+    await guardar(conversacion, ESTADOS_FLUJO.SOLICITAR_HORA, { hora: null, turno: null });
+    return [
+      botones('¿Prefieres horario de mañana o de tarde?', [
+        { id: 'turno:manana', titulo: 'Mañana' },
+        { id: 'turno:tarde', titulo: 'Tarde' },
+        { id: 'turno:ambos', titulo: 'Ambos' },
+        { id: 'menu:volver', titulo: 'Volver al menú' }
+      ])
+    ];
   }
 
   if (!afirmativo) {
@@ -1311,21 +1418,20 @@ const manejarConfirmacion = async (conversacion, paciente, entrada, seleccion) =
       ultimaConfirmacion: { huella, citaId: cita.id, en: Date.now(), fecha: cita.fecha, hora: cita.hora }
     });
 
-    return [
-      texto(
-        [
-          '✅ *Cita agendada*',
-          '',
-          `📋 Cita #${cita.id}`,
-          `• Servicio: ${cita.servicio?.nombre ?? contexto.servicioNombre}`,
-          `• Profesional: ${profesional || contexto.profesionalNombre}`,
-          `• Fecha: ${formatearFecha(cita.fecha)}`,
-          `• Hora: ${String(cita.hora).slice(0, 5)}`,
-          '',
-          'Te esperamos. Si necesitas cambiarla, escribe *menú* y elige *Hablar con una persona*.'
-        ].join('\n')
-      )
-    ];
+    return mostrarMenu(conversacion, {
+      saludo: true,
+      encabezado: [
+        '✅ *Cita agendada*',
+        '',
+        `📋 Cita #${cita.id}`,
+        `• Servicio: ${cita.servicio?.nombre ?? contexto.servicioNombre}`,
+        `• Profesional: ${profesional || contexto.profesionalNombre}`,
+        `• Fecha: ${formatearFecha(cita.fecha)}`,
+        `• Hora: ${String(cita.hora).slice(0, 5)}`,
+        '',
+        'Te esperamos.'
+      ].join('\n')
+    });
   } catch (error) {
     if (error.statusCode !== 409) throw error;
 
