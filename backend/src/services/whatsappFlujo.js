@@ -1075,11 +1075,18 @@ const mostrarServicios = async (conversacion) => {
     })
   ]);
 
+  const formatearPrecioMiles = (precio) => {
+    const num = Number(precio) || 0;
+    if (num === 0) return '0';
+    if (num % 1000 === 0) return `${num / 1000} mil`;
+    return num.toLocaleString('es-CO');
+  };
+
   const lineasServicios = servicios.length
     ? servicios.map((servicio) => {
       const duracion = Number(servicio.duracionMinutos) || DURACION_POR_DEFECTO;
 
-      return `• ${servicio.nombre}\n  ${duracion} min · ${formatearPrecio(servicio.precio)}`;
+      return `• ${servicio.nombre}\n  ${duracion} min · ${formatearPrecioMiles(servicio.precio)}`;
     })
     : ['• Por ahora no hay servicios publicados.'];
 
@@ -1112,11 +1119,10 @@ const mostrarServicios = async (conversacion) => {
         '',
         '🕒 *Horario de atención*',
         '',
-        ...lineasHorario,
-        '',
-        'Escribe *menú* para volver.'
+        ...lineasHorario
       ].join('\n')
-    )
+    ),
+    botones('Volver:', [{ id: 'menu:volver', titulo: 'Volver al menú' }])
   ];
 };
 
