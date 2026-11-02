@@ -1112,11 +1112,10 @@ const mostrarServicios = async (conversacion) => {
         '',
         '🕒 *Horario de atención*',
         '',
-        ...lineasHorario,
-        '',
-        'Escribe *menú* para volver.'
+        ...lineasHorario
       ].join('\n')
-    )
+    ),
+    botones('Volver:', [{ id: 'menu:volver', titulo: 'Volver al menú' }])
   ];
 };
 
