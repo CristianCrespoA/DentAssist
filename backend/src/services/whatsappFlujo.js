@@ -360,20 +360,16 @@ const derivarHumano = async (
 const mostrarMenu = async (conversacion, { saludo = true, encabezado = null, paciente = null } = {}) => {
   const contexto = leerContexto(conversacion);
   const pac = paciente || conversacion?.paciente || null;
-  const cuerpo = [
-    encabezado,
-    saludo ? `${saludoPara(contexto, pac)} Soy el asistente de DentAssist 🦷` : null,
-    encabezado ? null : `${saludoPara(contexto, pac)} ¿Qué necesitas hacer?`
-  ]
-    .filter(Boolean)
-    .join('\n\n');
+  const saludoTxt = saludo ? `${saludoPara(contexto, pac)} Soy el asistente de DentAssist 🦷` : null;
+  const cuerpo = [encabezado, saludoTxt].filter(Boolean).join('\n\n');
+  const cuerpoFinal = encabezado && saludoTxt ? cuerpo : (encabezado ? encabezado : (saludoTxt ? `${saludoTxt}\n\n¿Qué necesitas hacer?` : '¿Qué necesitas hacer?'));
 
   await guardar(conversacion, ESTADOS_FLUJO.MENU, {
     ...LIMPIAR_RESERVA,
     opciones: FILAS_MENU.map((fila) => fila.id)
   });
 
-  return [lista(cuerpo, FILAS_MENU, { etiqueta: 'Ver opciones', seccion: 'Menú' })];
+  return [lista(cuerpoFinal, FILAS_MENU, { etiqueta: 'Ver opciones', seccion: 'Menú' })];
 };
 
 const construirPasoFecha = async (conversacion, { encabezado = null } = {}) => {
