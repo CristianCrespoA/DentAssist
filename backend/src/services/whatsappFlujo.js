@@ -202,11 +202,14 @@ const esProximosDias = (entrada) =>
   ['proximos dias', 'proximo', 'proximos', 'siguientes dias', 'cualquier dia'].includes(entrada);
 
 const saludoPara = (contexto, paciente) => {
-  let nombre = typeof contexto.nombrePerfil === 'string' ? contexto.nombrePerfil.trim() : '';
-  if ((!nombre || nombre === '') && paciente) {
+  let nombre = '';
+  if (paciente) {
     const n = `${paciente.nombre || ''} ${paciente.apellido || ''}`.trim();
     if (n) nombre = n;
     else if (paciente.nombre) nombre = paciente.nombre;
+  }
+  if ((!nombre || nombre === '') && contexto) {
+    nombre = typeof contexto.nombrePerfil === 'string' ? contexto.nombrePerfil.trim() : '';
   }
   const primero = nombre.split(/\s+/)[0];
 
