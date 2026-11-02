@@ -34,6 +34,8 @@ export const obtenerSolicitud = (id, opciones) =>
 export const cambiarEstadoSolicitud = (id, datos) =>
   api.put(`/solicitudes/${encodeURIComponent(id)}/estado`, datos);
 
+export const eliminarSolicitud = (id) => api.delete(`/solicitudes/${encodeURIComponent(id)}`);
+
 /**
  * Cuenta las solicitudes por estado con los filtros activos. Son cuatro
  * peticiones de `limite=1` para aprovechar el `total` del listado paginado

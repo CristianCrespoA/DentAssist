@@ -160,6 +160,7 @@ function SolicitudDetalleModal({
   onReintentar,
   onClose,
   onCambiarEstado,
+  onEliminar,
 }) {
   const [resolviendo, setResolviendo] = useState(false);
   const [comentario, setComentario] = useState('');
@@ -272,6 +273,20 @@ function SolicitudDetalleModal({
       <Button variant="secondary" onClick={cerrar} disabled={Boolean(procesando)}>
         Cerrar
       </Button>
+      {solicitud?.estado === 'resuelta' && typeof onEliminar === 'function' ? (
+        <Button
+          variant="danger"
+          onClick={() => {
+            if (procesando) return;
+            if (confirm('¿Eliminar esta solicitud resuelta?')) {
+              onEliminar(solicitud.id);
+            }
+          }}
+          disabled={Boolean(procesando)}
+        >
+          Eliminar
+        </Button>
+      ) : null}
       {puedeTomarEnAtencion(solicitud) ? (
         <Button
           variant="secondary"
@@ -489,6 +504,7 @@ function SolicitudDetalleModal({
                 <ol className="mt-1 space-y-4">
                   {historial.map((fila) => {
                     const variante = varianteEstadoSolicitud(fila.estadoNuevo);
+                    const quien = fila.usuario ? `${fila.usuario.nombre || ''} ${fila.usuario.apellido || ''}`.trim() || fila.usuario.email : 'Sistema';
 
                     return (
                       <li
@@ -513,8 +529,7 @@ function SolicitudDetalleModal({
                           </p>
                         ) : null}
                         <p className="mt-1 text-xs text-neutral-500">
-                          {fila.usuario?.nombre || 'Sistema'} ·{' '}
-                          {formatearFechaHoraSolicitud(fila.createdAt)}
+                          {quien} · {formatearFechaHoraSolicitud(fila.createdAt)}
                         </p>
                       </li>
                     );

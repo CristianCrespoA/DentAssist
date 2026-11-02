@@ -30,6 +30,7 @@ import {
 import {
   cambiarEstadoSolicitud,
   contarSolicitudes,
+  eliminarSolicitud,
   listarSolicitudes,
   obtenerSolicitud,
 } from '../services/solicitudes';
@@ -926,6 +927,17 @@ function Solicitudes() {
         onReintentar={() => setIntentoDetalle((actual) => actual + 1)}
         onClose={cerrarDetalle}
         onCambiarEstado={manejarCambioEstado}
+        onEliminar={async (id) => {
+          try {
+            await eliminarSolicitud(id);
+            exito('Solicitud eliminada.');
+            cerrarDetalle();
+            setVersion((v) => v + 1);
+            recargar?.();
+          } catch (e) {
+            toastError(e?.mensaje || 'No se pudo eliminar la solicitud.');
+          }
+        }}
       />
     </section>
   );
