@@ -354,7 +354,7 @@ const mostrarMenu = async (conversacion, { saludo = true, encabezado = null } = 
   const cuerpo = [
     encabezado,
     saludo ? `${saludoPara(contexto)} Soy el asistente de DentAssist 🦷` : null,
-    encabezado ? null : '¿Qué necesitas hacer?'
+    encabezado ? null : `${saludoPara(contexto)} ¿Qué necesitas hacer?`
   ]
     .filter(Boolean)
     .join('\n\n');
@@ -1324,17 +1324,27 @@ const manejarHora = async (conversacion, entrada, seleccion) => {
 
   return [
     texto('Describe brevemente el motivo o asunto de tu cita (puedes escribirlo ahora):'),
-    botones('Si deseas cancelar:', [{ id: 'menu:volver', titulo: 'Volver al menú' }])
+    botones('Opción rápida:', [
+      { id: 'desc:sin_motivo', titulo: 'Sin motivo' },
+      { id: 'menu:volver', titulo: 'Volver al menú' }
+    ])
   ];
 };
 
-const manejarDescripcion = async (conversacion, paciente, entrada) => {
+const manejarDescripcion = async (conversacion, paciente, entrada, seleccion) => {
   const contexto = leerContexto(conversacion);
+  if (seleccion?.id === 'desc:sin_motivo' || entrada === 'sin motivo') {
+    await guardar(conversacion, ESTADOS_FLUJO.CONFIRMAR, { descripcion: null });
+    return [salidaConfirmacion({ ...contexto, descripcion: null })];
+  }
   const descripcion = (entrada || '').trim();
   if (!descripcion) {
     return [
       texto('Por favor describe el motivo o asunto de tu cita.'),
-      botones('Si deseas cancelar:', [{ id: 'menu:volver', titulo: 'Volver al menú' }])
+      botones('Opción rápida:', [
+        { id: 'desc:sin_motivo', titulo: 'Sin motivo' },
+        { id: 'menu:volver', titulo: 'Volver al menú' }
+      ])
     ];
   }
   await guardar(conversacion, ESTADOS_FLUJO.CONFIRMAR, { descripcion });
@@ -1573,7 +1583,7 @@ const procesar = async ({ conversacion, paciente, mensaje, seleccion = null }) =
     case ESTADOS_FLUJO.SOLICITAR_HORA:
       return manejarHora(conversacion, entrada, seleccion);
     case ESTADOS_FLUJO.SOLICITAR_DESCRIPCION:
-      return manejarDescripcion(conversacion, paciente, mensaje?.contenido || entrada);
+      return manejarDescripcion(conversacion, paciente, mensaje?.contenido || entrada, seleccion);
     case ESTADOS_FLUJO.CREAR_SOLICITUD:
       return manejarCrearSolicitud(conversacion, paciente, mensaje);
     case ESTADOS_FLUJO.CONFIRMAR:
