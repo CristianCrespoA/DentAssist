@@ -60,6 +60,7 @@ const ESTADOS_FLUJO = {
   REGISTRO_NOMBRE: 'registro_nombre',
   REGISTRO_APELLIDO: 'registro_apellido',
   REGISTRO_CORREO: 'registro_correo',
+  REGISTRO_FECHA_NACIMIENTO: 'registro_fecha_nacimiento',
   MENU: 'menu',
   INFO_SERVICIOS: 'info_servicios',
   DISPONIBILIDAD: 'disponibilidad',

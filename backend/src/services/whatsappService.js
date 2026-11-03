@@ -215,8 +215,8 @@ const procesarMensajeEntrante = async (datos, opciones = {}) => {
   // Si es la primera vez y no tiene datos completos, pedir datos (solo si no estamos ya en flujo de registro)
   if (
     paciente &&
-    (!paciente.nombre || paciente.nombre === NOMBRE_CONTACTO_POR_DEFECTO || !paciente.correo) &&
-    ![ESTADOS_FLUJO.REGISTRO_NOMBRE, ESTADOS_FLUJO.REGISTRO_APELLIDO, ESTADOS_FLUJO.REGISTRO_CORREO].includes(conversacion.estadoFlujo)
+    (!paciente.nombre || paciente.nombre === NOMBRE_CONTACTO_POR_DEFECTO || !paciente.correo || !paciente.fechaNacimiento) &&
+    ![ESTADOS_FLUJO.REGISTRO_NOMBRE, ESTADOS_FLUJO.REGISTRO_APELLIDO, ESTADOS_FLUJO.REGISTRO_CORREO, ESTADOS_FLUJO.REGISTRO_FECHA_NACIMIENTO].includes(conversacion.estadoFlujo)
   ) {
     await conversacion.update({ estadoFlujo: ESTADOS_FLUJO.REGISTRO_NOMBRE });
     await enviarYGuardar({
