@@ -3,9 +3,8 @@
 Sistema de gestión para consultorios odontológicos con integración a WhatsApp.
 
 ## Tecnologías
-- **Backend:** Node.js, Express, Sequelize, MySQL/MariaDB
+- **Backend:** Node.js, Express, Sequelize, MySQL
 - **Frontend:** React, Vite, Tailwind CSS
-- **Autenticación:** JWT
 - **Integración:** WhatsApp Cloud API (Meta)
 
 ## Funcionalidades
