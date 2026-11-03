@@ -53,6 +53,11 @@ const FILAS_MENU = [
     descripcion: 'Consulta cupos por día'
   },
   {
+    id: 'menu:mis_citas',
+    titulo: 'Mis citas',
+    descripcion: 'Ver citas pendientes'
+  },
+  {
     id: 'menu:solicitar',
     titulo: 'Solicitar cita',
     descripcion: 'Agenda en pocos pasos'
@@ -1003,6 +1008,8 @@ const manejarMenu = async (conversacion, paciente, entrada, seleccion, mensaje) 
       return mostrarServicios(conversacion);
     case 'disponibilidad':
       return iniciarServicio(conversacion, 'disponibilidad');
+    case 'mis_citas':
+      return mostrarMisCitas(conversacion, paciente);
     case 'solicitar':
       return iniciarServicio(conversacion, 'reserva');
     case 'cancelar':
@@ -1608,6 +1615,51 @@ const procesar = async ({ conversacion, paciente, mensaje, seleccion = null }) =
       return mostrarMenu(conversacion, { saludo: true, paciente });
   }
   return mostrarMenu(conversacion, { saludo: true, paciente });
+};
+
+const mostrarMisCitas = async (conversacion, paciente) => {
+  if (!paciente?.id) {
+    await guardar(conversacion, ESTADOS_FLUJO.MENU, { ...LIMPIAR_RESERVA, opciones: FILAS_MENU.map((fila) => fila.id) });
+    return [
+      texto('No tengo un paciente asociado a este número.'),
+      botones('Volver:', [{ id: 'menu:volver', titulo: 'Volver al menú' }])
+    ];
+  }
+
+  const citas = await db.Cita.findAll({
+    where: {
+      pacienteId: paciente.id,
+      estado: { [require('sequelize').Op.in]: ['programada', 'confirmada'] }
+    },
+    include: [
+      { model: db.Profesional, as: 'profesional', attributes: ['nombre', 'apellido'] },
+      { model: db.Servicio, as: 'servicio', attributes: ['nombre'] }
+    ],
+    order: [['fecha', 'ASC'], ['hora', 'ASC']],
+    limit: 10
+  });
+
+  if (!citas.length) {
+    await guardar(conversacion, ESTADOS_FLUJO.MENU, { ...LIMPIAR_RESERVA, opciones: FILAS_MENU.map((fila) => fila.id) });
+    return [
+      texto('No tienes citas pendientes.'),
+      botones('Volver:', [{ id: 'menu:volver', titulo: 'Volver al menú' }])
+    ];
+  }
+
+  const lineas = citas.map((cita, idx) => {
+    const fecha = formatearFecha(cita.fecha);
+    const hora = cita.hora?.substring(0, 5);
+    const prof = cita.profesional ? `${cita.profesional.nombre} ${cita.profesional.apellido}` : '';
+    const serv = cita.servicio?.nombre || '';
+    return `${idx + 1}. ${fecha} ${hora} - ${serv}${prof ? ' - ' + prof : ''} (${cita.estado})`;
+  });
+
+  await guardar(conversacion, ESTADOS_FLUJO.MENU, { ...LIMPIAR_RESERVA, opciones: FILAS_MENU.map((fila) => fila.id) });
+  return [
+    texto(`Tus citas pendientes:\n\n${lineas.join('\n')}`),
+    botones('Volver:', [{ id: 'menu:volver', titulo: 'Volver al menú' }])
+  ];
 };
 
 const abrirMenu = async (conversacion, opciones = {}) => mostrarMenu(conversacion, opciones);
