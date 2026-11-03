@@ -212,8 +212,12 @@ const procesarMensajeEntrante = async (datos, opciones = {}) => {
     nombrePerfil: datos?.nombrePerfil
   });
 
-  // Si es la primera vez y no tiene datos completos, pedir datos
-  if (paciente && (!paciente.nombre || paciente.nombre === NOMBRE_CONTACTO_POR_DEFECTO || !paciente.correo)) {
+  // Si es la primera vez y no tiene datos completos, pedir datos (solo si no estamos ya en flujo de registro)
+  if (
+    paciente &&
+    (!paciente.nombre || paciente.nombre === NOMBRE_CONTACTO_POR_DEFECTO || !paciente.correo) &&
+    ![ESTADOS_FLUJO.REGISTRO_NOMBRE, ESTADOS_FLUJO.REGISTRO_APELLIDO, ESTADOS_FLUJO.REGISTRO_CORREO].includes(conversacion.estadoFlujo)
+  ) {
     await conversacion.update({ estadoFlujo: ESTADOS_FLUJO.REGISTRO_NOMBRE });
     await enviarYGuardar({
       conversacion,
@@ -225,7 +229,7 @@ const procesarMensajeEntrante = async (datos, opciones = {}) => {
       duplicado: false,
       conversacion,
       paciente,
-      mensaje,
+      mensaje: null,
       respuestas: []
     };
   }
