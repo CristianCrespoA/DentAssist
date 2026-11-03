@@ -114,8 +114,9 @@ const Login = () => {
       </aside>
 
       <main className="flex min-h-screen items-center justify-center px-4 py-10 sm:px-6 lg:min-h-0 lg:px-12">
-        <div className="w-full max-w-md">
-          <div className="flex items-center gap-3 lg:hidden">
+        <div className="flex w-full max-w-4xl items-center justify-center gap-8">
+          <div className="w-full max-w-md">
+            <div className="flex items-center gap-3 lg:hidden">
             <span className="flex size-11 items-center justify-center rounded-card bg-primary-700 text-white shadow-xs">
               <svg className="size-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M12 2C7.5 2 5 5 5 8c0 2 1 3.5 2 4.5.5.5 1 1 1 1.5v1a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-1c0-.5.5-1 1-1.5 1-1 2-2.5 2-4.5 0-3-2.5-6-7-6zm-2 13v1h4v-1H10zm-1 2h6v1a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-1z"/>
@@ -220,6 +221,10 @@ const Login = () => {
           <p className="mt-6 text-center text-xs text-neutral-600">
             ¿Problemas para acceder? Contacta al administrador de la clínica.
           </p>
+          </div>
+          <div className="hidden lg:block">
+            <img src="https://i.imgur.com/VxMT1El.png" alt="QR WhatsApp" className="h-64 w-64 rounded-lg shadow-lg" />
+          </div>
         </div>
       </main>
     </div>
