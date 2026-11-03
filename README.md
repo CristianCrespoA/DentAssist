@@ -95,5 +95,3 @@ npm test
 ## Documentación
 - [Colección Postman](docs/POSTMAN-DENTASSIST.json)
 - [README Frontend](frontend/README.md)
-- [README Backend](backend/README.md)
-- [Guía WhatsApp](backend/README_WHATSAPP.md)
