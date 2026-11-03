@@ -204,13 +204,14 @@ const esProximosDias = (entrada) =>
 const saludoPara = (contexto, paciente) => {
   let nombre = '';
   if (paciente) {
-    const n = `${paciente.nombre || ''} ${paciente.apellido || ''}`.trim();
-    if (n) nombre = n;
-    else if (paciente.nombre) nombre = paciente.nombre;
+    const completo = `${paciente.nombre || ''} ${paciente.apellido || ''}`.trim();
+    if (completo) nombre = completo;
+    else if (paciente.nombre && paciente.nombre !== 'Contacto WhatsApp') nombre = paciente.nombre;
   }
   if ((!nombre || nombre === '') && contexto) {
     nombre = typeof contexto.nombrePerfil === 'string' ? contexto.nombrePerfil.trim() : '';
   }
+  if (!nombre || nombre.toLowerCase() === 'contacto whatsapp') nombre = '';
   const primero = nombre.split(/\s+/)[0];
 
   return primero ? `¡Hola, ${primero}!` : '¡Hola!';
